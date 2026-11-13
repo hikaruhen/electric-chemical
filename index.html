@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#113d38"><title>電化學實驗室｜讓反應看得見</title><link rel="stylesheet" href="style.css"></head>
-<body><header><div class="brand"><span class="brand-icon">e⁻</span><div><strong>電化學實驗室</strong><small>接上電路，讓反應看得見 · v1.1</small></div></div><div class="header-actions"><button id="project" aria-pressed="false">投影模式</button><button id="help">操作與模型說明</button></div></header>
+<body><header><div class="brand"><span class="brand-icon">e⁻</span><div><strong>電化學實驗室</strong><small>接上電路，讓反應看得見 · v2.0</small></div></div><div class="header-actions"><button id="project" aria-pressed="false">投影模式</button><button id="help">操作與模型說明</button></div></header>
 <main><nav id="tabs" aria-label="實驗選擇"></nav><section class="intro"><div><span class="eyebrow" id="eyebrow">01 / 化學能 → 電能</span><h1 id="title">鋅銅電池</h1><p id="subtitle"></p></div><button id="reset" class="primary">↺ 一鍵重設</button></section>
 <div id="lab"><div class="workbench"><section class="canvas-card"><div class="scene-toolbar"><span class="tag">巨觀裝置 × 微觀粒子</span><label>顯示 <select id="view"><option value="electron">電子流 e⁻</option><option value="current">傳統電流 I</option><option value="none">隱藏外電路粒子</option></select></label></div><svg id="scene" viewBox="0 0 820 560" role="img" aria-label="可操作實驗裝置，接點可點選或拖曳，電極與鹽橋可上下拖曳"></svg><div class="legend"><span><i class="electron"></i>外電路電子</span><span><i class="cation"></i>陽離子</span><span><i class="anion"></i>陰離子</span><span>粒子數量、尺寸與時間皆為示意</span></div></section>
 <section class="transport"><button id="play" class="primary">Ⅱ 暫停</button><label>速度 <select id="speed"><option value="0.25">慢速 ¼×</option><option value="1" selected>正常 1×</option><option value="4">加速 4×</option></select></label><span id="clock">示意時間 0.0 s</span><button id="cancel" hidden>取消接線</button></section><div id="status" role="status" aria-live="polite"></div><p id="notice" class="notice" aria-live="polite"></p>
@@ -10,6 +10,6 @@
 <section class="panel challenge"><span class="eyebrow">預測 → 操作 → 觀察</span><h2 id="challenge-title"></h2><p id="challenge-prompt"></p><div id="predictions"></div><p id="challenge-result" role="status"></p></section>
 <section class="panel concise"><h2>觀察提醒</h2><p id="reminder"></p><p class="hint">氧化＝失去電子；還原＝得到電子。正負極由裝置決定，不能只靠電極名稱猜。</p></section></aside></div>
 <section id="battery-room" hidden></section>
-<footer>依指定國中自然教材第 19–33、36–37 頁整理 · 本機互動模型 · 無帳號、無資料上傳</footer></main>
+<footer>依指定國中自然教材第 19–33 頁整理 · 本機互動模型 · 無帳號、無資料上傳</footer></main>
 <dialog id="guide"><div class="dialog-head"><h2>操作與模型說明</h2><button id="close-help" aria-label="關閉說明">✕</button></div><div id="guide-content"></div></dialog>
 <script type="module" src="app.js"></script></body></html>
