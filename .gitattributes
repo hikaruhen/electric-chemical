@@ -1,0 +1,9 @@
+* text=auto eol=lf
+# Preserve the exact bytes accepted by the independent product review.
+/index.html -text
+/style.css -text
+/app.js -text
+/model.js -text
+/battery-structure.js -text
+*.png binary
+*.pdf binary

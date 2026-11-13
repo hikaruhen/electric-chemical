@@ -1,0 +1,9 @@
+{
+  "siteFiles": ["index.html", "style.css", "app.js", "model.js", "battery-structure.js"],
+  "repositoryFiles": [
+    ".gitignore", ".gitattributes", "README.md", "index.html", "style.css",
+    "app.js", "model.js", "battery-structure.js", "server.mjs", "package.json",
+    "release-files.json", "scripts/prepare-pages.mjs", "scripts/check-release.mjs",
+    "tests/model.test.mjs", ".github/workflows/pages.yml"
+  ]
+}

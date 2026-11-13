@@ -1,0 +1,34 @@
+# Default deny: only reviewed source and release configuration enter Git.
+*
+!.gitignore
+!.gitattributes
+!README.md
+!index.html
+!style.css
+!app.js
+!model.js
+!battery-structure.js
+!server.mjs
+!package.json
+!release-files.json
+!scripts/
+scripts/*
+!scripts/prepare-pages.mjs
+!scripts/check-release.mjs
+!tests/
+tests/*
+!tests/model.test.mjs
+!.github/
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/pages.yml
+# Local-only evidence, source material, and build output stay out.
+qa/
+_site/
+node_modules/
+*.pdf
+*.png
+*.zip
+.env*
+HANDOFF.md
