@@ -12,3 +12,40 @@ body{font-size:14px;line-height:1.45}header{height:56px;padding:6px 16px;gap:10p
 #battery-room{height:calc(100dvh - 120px);margin:0;min-height:520px}.battery-layout{height:100%;grid-template-columns:1fr;grid-template-rows:44px minmax(0,1fr);gap:8px}.battery-menu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.battery-menu button{padding:6px 12px;font-size:14px;text-align:center}.battery-detail{min-height:0;padding:12px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr);grid-template-rows:52px minmax(0,1fr);gap:8px 18px;overflow:auto}.battery-heading{grid-column:1/-1}.battery-heading h2{font-size:18px}.battery-heading p{display:none}.battery-heading button{font-size:13px;min-width:70px}.battery-cutaway{min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:8px}.battery-cutaway svg{height:100%;max-height:none;min-height:0}.part-note{padding:8px 12px;font-size:13px;min-height:62px}.battery-reaction{margin:0;align-self:center;grid-column:2;grid-row:2}.battery-reaction h2{font-size:16px}.battery-reaction .section-title>span{display:none}.overall-reaction{font-size:19px;padding:10px;line-height:1.7}.electron-direction{font-size:13px}.battery-half{font-size:13px;margin:12px 0}.battery-half summary,.battery-detail-notes summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--green);font-weight:600}.battery-half .reactions{grid-template-columns:1fr}.battery-detail-notes{grid-column:2;grid-row:2;align-self:end;font-size:12px;background:white}.battery-detail-notes[open]{position:relative;z-index:2;max-height:80%;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px}.battery-reaction:has(.battery-half[open]){align-self:start;max-height:100%;overflow:auto}.battery-part rect{pointer-events:all}
 @media(max-height:750px) and (min-width:900px){header{height:50px}.brand small{display:none}nav{height:52px}#lab,#battery-room{height:calc(100dvh - 110px)}.panel{padding:10px}.two,.full{margin:6px 0}aside{gap:8px}.live-observation{padding:8px 10px}.battery-detail{grid-template-rows:44px minmax(0,1fr)}.part-note{min-height:58px}.overall-reaction{font-size:17px}}
 @media(max-width:899px){header{height:auto;min-height:56px;padding:6px 10px}.brand strong{font-size:16px}.brand small{display:none}.header-actions button{font-size:12px;padding:5px 8px}main{padding:0 8px}nav{overflow:auto;gap:2px}nav button{font-size:13px;padding:6px 10px}#lab{height:auto;min-height:0;grid-template-columns:1fr}.workbench{height:auto;display:block}.canvas-card:not(.battery-detail){height:calc(100vw * .84);min-height:360px}.transport{height:52px}aside{display:grid;grid-template-columns:1fr 1fr;gap:8px}.detail-actions{align-self:end}.live-observation{align-self:start}#battery-room{height:auto}.battery-detail{grid-template-columns:1fr;grid-template-rows:auto}.battery-heading{grid-column:auto}.battery-cutaway{height:460px}.battery-reaction,.battery-detail-notes{grid-column:1;grid-row:auto}.battery-detail-notes[open]{max-height:none}.battery-layout{display:block}.battery-menu{margin-bottom:8px}.legend{font-size:10px;gap:8px}.legend span:last-child{display:none}}
+
+/* Native scrolling and explicit image sizing on phones; drag is opt-in. */
+#scene-viewport{min-width:0;min-height:0;overflow:hidden}.phone-tools,.phone-hint{display:none}
+@media(max-width:899px){
+ html,body{height:auto;min-height:100%;overflow-y:auto;touch-action:pan-x pan-y pinch-zoom}
+ #lab,.workbench{height:auto;min-height:0;overflow:visible}
+ .canvas-card:not(.battery-detail){display:flex;flex-direction:column;height:auto;min-height:0;overflow:visible}
+ .scene-toolbar{min-height:48px;flex:none}
+ .phone-tools{display:flex;align-items:center;gap:6px;padding:5px 8px;flex-wrap:wrap;background:#eef5ee}
+ .phone-tools button{min-width:44px;padding:5px 8px;font-size:13px}.phone-tools output{font-size:12px;margin-right:auto}
+ #gesture-mode[aria-pressed=true]{background:#146451;color:white}
+ #scene-viewport{height:clamp(260px,calc((100vw - 18px)*.830645),440px);overflow:auto;touch-action:pan-x pan-y pinch-zoom;border-block:1px solid var(--line);-webkit-overflow-scrolling:touch;overscroll-behavior:auto}
+ #scene,.project #scene{display:block;width:calc(100% * var(--scene-zoom,1));height:auto!important;aspect-ratio:620 / 515;max-width:none;max-height:none;min-height:0;touch-action:pan-x pan-y pinch-zoom;user-select:none}
+ #scene-viewport.drag-mode,#scene-viewport.drag-mode #scene{touch-action:none}
+ .phone-hint{display:block;margin:0;padding:6px 10px;font-size:12px;background:#f5f8f2}
+ .legend{flex:none;min-height:28px;flex-wrap:wrap}.transport{height:auto;min-height:52px;flex-wrap:wrap}
+ aside{grid-template-columns:1fr 1fr}.panel{min-width:0}#orientation-hint{max-width:90vw;width:max-content}
+}
+@media(max-width:570px){
+ header{flex-wrap:wrap;gap:4px;padding:6px 10px}.brand{width:100%}.header-actions{width:100%;justify-content:flex-end}header button{min-height:44px;font-size:13px}
+ nav{height:auto;min-height:56px;flex-wrap:wrap;overflow:visible}nav button{flex:1 0 auto;padding:6px 10px}
+ aside{display:flex;flex-direction:column}.live-observation,.detail-actions{width:100%}.detail-actions{margin-bottom:12px}
+ .battery-cutaway{height:auto;display:block}.battery-cutaway svg{width:100%;height:auto;aspect-ratio:770 / 480}.battery-part{touch-action:pan-y pinch-zoom}
+ .battery-heading{display:flex;flex-wrap:wrap}.battery-menu{grid-template-columns:1fr;gap:4px}.battery-detail{overflow:visible}.battery-detail-notes[open]{overflow:visible}
+}
+
+@media(max-width:899px){#scene-viewport{height:auto;overflow:visible;flex:none;border:0}#scene-viewport.zoomed{height:clamp(260px,calc((100vw - 18px)*.830645),440px);overflow:auto}#scene{flex:none}}
+
+@media(max-width:899px) and (orientation:landscape){
+ header{height:48px;min-height:48px;padding:2px 8px}header .brand{display:none}.header-actions{width:100%;justify-content:flex-end}nav{height:48px;min-height:48px;padding:2px 0;flex-wrap:nowrap}
+ .scene-toolbar{min-height:44px;height:44px}.phone-tools{min-height:48px;padding:2px 8px}.phone-hint{display:none}
+ #scene-viewport,#scene-viewport.zoomed{height:min(300px,calc(100dvh - 60px));overflow:visible}
+ #scene-viewport.zoomed{overflow:auto}
+ #scene,.project #scene{width:calc(min(100vw - 18px, min(300px, 100dvh - 60px)*1.203883) * var(--scene-zoom,1));height:auto!important;margin-inline:auto}
+}
+
+@media(max-width:899px) and (orientation:landscape){.phone-tools{position:sticky;top:0;z-index:4;border-bottom:1px solid var(--line)}#scene-viewport{scroll-margin-top:52px}}
