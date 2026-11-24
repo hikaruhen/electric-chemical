@@ -1,5 +1,5 @@
 import {MODES,initial,snapshot,tick,polarity,freshObservation,connect,testCollectedGas,GEOMETRY,electrodeSpec,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,GAS_TRAVEL_TIME} from './model.js';
-import {batteryStructure} from './battery-structure.js';
+import {batteryStructure} from './battery-structure.js?v=2.2.0';
 const $=s=>document.querySelector(s), svg=$('#scene');
 let state=initial(),pending=null,drag=null,last=performance.now(),lastUI=0,batteryIndex=0,batteryPart='overview';
 state.observationPolarity=[-1,1];
