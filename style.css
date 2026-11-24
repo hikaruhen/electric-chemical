@@ -49,3 +49,5 @@ body{font-size:14px;line-height:1.45}header{height:56px;padding:6px 16px;gap:10p
 }
 
 @media(max-width:899px) and (orientation:landscape){.phone-tools{position:sticky;top:0;z-index:4;border-bottom:1px solid var(--line)}#scene-viewport{scroll-margin-top:52px}}
+
+.current-arrow{display:none}.is-current .current-arrow{display:block}.is-current .electron-dot,.is-current .electron-minus{display:none}.legend .current-swatch{background:none;width:auto;height:auto;font-size:17px;line-height:12px;color:#a86b00}
