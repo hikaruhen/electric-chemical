@@ -13,7 +13,7 @@ const txt=(x,y,value,size=18,anchor='start',fill='#284e43',extra='')=>`<text x="
 export const BATTERY_PARTS=[
  {overview:['碳鋅電池','鋅筒是負極；中央碳棒只負責導電，正極反應物是周圍的二氧化錳。'],zinc:['鋅筒（負極）','外層鋅筒失去電子，生成鋅離子；同時也是盛裝內容物的容器。'],carbon:['碳棒（集流）','連到正端，收集與傳遞電子；碳不是本簡化反應中的正極反應物。'],mix:['二氧化錳＋碳粉','包圍中央碳棒，二氧化錳得到電子而還原；碳粉幫助導電。'],paste:['酸性電解質糊','含氯化銨、氯化鋅及少量水，分布在糊狀混合物與隔紙內，讓離子移動。'],separator:['多孔隔紙','分開鋅筒與正極混合物，防止直接短路；離子仍可通過。'],seal:['封口與絕緣','封住電解質，並使正端碳棒與負端鋅筒彼此絕緣。']},
  {overview:['鹼性電池','鋅粉在中央，二氧化錳在外圈；中央金屬棒連負端，鋼殼連正端。'],zinc:['中央鋅粉膠（負極）','鋅粉分散在含氫氧化鉀的膠內，失去電子，依教材簡化式形成氧化鋅。'],collector:['金屬集電棒（負端）','插入中央鋅粉膠，向下連到負端底蓋；不是碳棒，也不是反應物。'],mix:['外圈二氧化錳（正極）','二氧化錳與導電碳粉壓在鋼殼內側，得到電子而還原。'],paste:['氫氧化鉀 KOH','鹼性電解質分布於鋅粉膠、隔膜及正極混合物；不是一個獨立大空槽。'],separator:['環狀多孔隔膜','位在中央鋅粉與外圈二氧化錳之間，防短路但讓離子通過。'],steel:['鋼殼（正極集流）','包住外圈正極材料，連接上方正端；與負端底蓋由絕緣封口隔開。']},
- {overview:['鉛蓄電池（單格約 2 V）','5 片正、負極板交錯並聯，以隔板隔開浸在硫酸液中；實物汽車電瓶常由 6 個單格串聯組成約 12 V。'],negative:['鉛負極板 Pb（3 片並聯）','放電時與 SO₄²⁻ 反應生成硫酸鉛並放出電子；充電時得電子恢復為鉛並釋出 SO₄²⁻。'],positive:['二氧化鉛正極板 PbO₂（2 片並聯）','放電時與 H⁺、SO₄²⁻ 反應生成硫酸鉛與水；充電時氧化恢復二氧化鉛，並釋出 H⁺ 與 SO₄²⁻。'],paste:['硫酸電解液 H₂SO₄','含 H⁺ 與紫色 SO₄²⁻。放電時兩極皆消耗 SO₄²⁻、正極消耗 H⁺，酸濃度下降；充電時兩極釋出離子，酸濃度回升。'],separator:['多孔絕緣隔板（4 片）','夾在每對相鄰正、負極板之間，防止短路，仍讓電解液離子通過。'],bus:['同極匯流排與端子','3 片鉛負板接至左負匯流排、2 片二氧化鉛正板接至右正匯流排，彼此絕緣不短路。充電時外接直流充電器須正接正、負接負。']}
+ {overview:['鉛蓄電池（單格約 2 V）','5 片正、負極板交錯並聯（負極板多一片，讓正極板兩面都對著負極板），以隔板隔開浸在硫酸液中；實物汽車電瓶常由 6 個單格串聯組成約 12 V。'],negative:['鉛負極板 Pb（3 片並聯）','放電時與 SO₄²⁻ 反應生成硫酸鉛並放出電子；充電時得電子恢復為鉛並釋出 SO₄²⁻。'],positive:['二氧化鉛正極板 PbO₂（2 片並聯）','放電時與 H⁺、SO₄²⁻ 反應生成硫酸鉛與水；充電時氧化恢復二氧化鉛，並釋出 H⁺ 與 SO₄²⁻。'],paste:['硫酸電解液 H₂SO₄','含 H⁺ 與紫色 SO₄²⁻。放電時兩極皆消耗 SO₄²⁻、正極消耗 H⁺，酸濃度下降；充電時兩極釋出離子，酸濃度回升。'],separator:['多孔絕緣隔板（4 片）','夾在每對相鄰正、負極板之間，防止短路，仍讓電解液離子通過。'],bus:['同極匯流排與端子','3 片鉛負板接至左負匯流排、2 片二氧化鉛正板接至右正匯流排，彼此絕緣不短路。充電時外接直流充電器須正接正、負接負。']}
 ];
 function part(key,content,selected,label,callout=false){return `<g data-part="${key}" role="button" tabindex="0" aria-label="${callout?'':'剖面部位：'}${label}" class="battery-part ${selected===key?'part-selected':''}">${content}</g>`;}
 function callout(key,label,x,y,row,selected){return `<path d="M${x} ${y} H420 V${row-7} H472" fill="none" stroke="#91aaa0" stroke-width="1.5" pointer-events="none" aria-hidden="true"/>`+part(key,`<rect x="470" y="${row-30}" width="365" height="60" rx="8" fill="${selected===key?'#e0edd5':'#f2f6f0'}"/>`+txt(485,row-3,label,18),selected,label,true);}
@@ -48,8 +48,8 @@ function lead(selected,charging){
    '</g>';
  }else{
   h+=`<g id="lead-load"><rect x="184" y="45" width="138" height="56" rx="10" fill="#f7faf4" stroke="#759486" stroke-width="2"/>`+
-   `<circle id="lead-bulb-glow" cx="218" cy="73" r="15" fill="#f7cf63" opacity="0.55"/>`+
-   `<circle cx="218" cy="73" r="9.5" fill="#fff6d1" stroke="#b98a1e" stroke-width="2"/>`+
+   `<circle id="lead-bulb-glow" cx="218" cy="73" r="15" fill="#f7cf63" opacity="0"/>`+
+   `<circle id="lead-bulb-core" cx="218" cy="73" r="9.5" fill="#edf2ee" stroke="#7d8f88" stroke-width="2"/>`+
    `<path d="M214 75 Q218 68 222 75" fill="none" stroke="#b97810" stroke-width="1.6"/>`+
    txt(272,70,'外部負載',15,'middle','#244c42','font-weight="700"')+
    txt(272,89,'放電供電',14,'middle','#58746b')+
@@ -141,7 +141,9 @@ export function updateLeadVisuals(root,process,progress,playing){
  if(cr){cr.setAttribute('width',cw.toFixed(2));cr.setAttribute('x','764');}
  if(ll)ll.setAttribute('opacity',clamp01((coat-.2)/.35).toFixed(3));
  if(lr)lr.setAttribute('opacity',clamp01((coat-.2)/.35).toFixed(3));
- const glow=svg.querySelector('#lead-bulb-glow');if(glow)glow.setAttribute('opacity',done?'0':(0.62-0.25*p).toFixed(3));
+ const lit=!done&&(playing||p>0),glow=svg.querySelector('#lead-bulb-glow'),core=svg.querySelector('#lead-bulb-core');
+ if(glow)glow.setAttribute('opacity',lit?(0.62-0.25*p).toFixed(3):'0');
+ if(core){core.setAttribute('fill',lit?'#fff6d1':'#edf2ee');core.setAttribute('stroke',lit?'#b98a1e':'#7d8f88');}
  // External electrons: move strictly along left/right external wires connected to exact +/- terminals
  const wl=svg.querySelector('#lead-wire-l'),wr=svg.querySelector('#lead-wire-r');
  if(wl&&wr){
@@ -190,7 +192,7 @@ export function updateLeadVisuals(root,process,progress,playing){
   wn.setAttribute('opacity',(0.72+0.28*p).toFixed(3));
  }
  const st=svg.querySelector('#lead-stage-text'),ct=svg.querySelector('#lead-conc-text'),pct=Math.round(p*100);
- if(st)st.textContent=done?(charging?'已達充電示意終態 · 極板恢復 Pb／PbO₂（按重播再看）':'已達放電示意終態 · 兩極覆蓋 PbSO₄（按重播再看）'):!playing?(charging?`充電已暫停（${pct}%）`:`放電已暫停（${pct}%）`):(charging?'充電進行中 · 兩極釋出 SO₄²⁻，正極釋出 H⁺':'放電進行中 · 兩極消耗 SO₄²⁻，正極消耗 H⁺ 生成 H₂O');
+ if(st)st.textContent=done?(charging?'已達充電示意終態 · 極板恢復 Pb／PbO₂（可按重置動畫）':'已達放電示意終態 · 兩極覆蓋 PbSO₄（可按重置動畫）'):!playing?(p===0?(charging?'已暫停 · 按「▶ 播放」開始充電（0%）':'已暫停 · 按「▶ 播放」開始放電（0%）'):(charging?`充電已暫停（${pct}%）`:`放電已暫停（${pct}%）`)):(charging?'充電進行中 · 兩極釋出 SO₄²⁻，正極釋出 H⁺':'放電進行中 · 兩極消耗 SO₄²⁻，正極消耗 H⁺ 生成 H₂O');
  if(ct)ct.textContent=(charging?'硫酸濃度 ↑ · 恢復 Pb／PbO₂':'硫酸濃度 ↓ · 兩極生成 PbSO₄')+`（定性示意 ${pct}%）`;
 }
 export function batteryStructure(index,process='discharge',selected='overview'){
@@ -198,7 +200,7 @@ export function batteryStructure(index,process='discharge',selected='overview'){
  const viewBox=index===2?'20 12 820 456':'80 20 770 480';
  const cutaway=`<div class="battery-cutaway${index===2?' lead-cutaway':''}"><svg viewBox="${viewBox}" role="group" aria-label="可點選部位的電池剖面">${index===2?lead(selected,charging):cylindrical(index,selected)}</svg>${index===2?'':`<div id="battery-part-note" class="part-note" role="status"><strong>${description[0]}</strong>　${description[1]}</div>`}</div>`;
  const reactionHtml=`<section class="battery-reaction"><div class="section-title"><h2>${charging?'充電：電能 → 化學能':'放電：化學能 → 電能'}</h2><span>教材簡化平衡式</span></div><p class="overall-reaction">${formatReaction(r.overall)}</p><details class="battery-half"><summary>兩極半反應</summary><div class="reactions"><div class="reaction"><strong>負極 · ${charging?'還原（得電子）':'氧化（失電子）'}</strong><code>${formatReaction(r.negative)}</code></div><div class="reaction"><strong>正極 · ${charging?'氧化（失電子）':'還原（得電子）'}</strong><code>${formatReaction(r.positive)}</code></div></div></details><p class="electron-direction">${charging?'電子：充電器負端 → 負極；正極 → 充電器正端（正接正、負接負；電子不經電解液）。':index===2?'電子：鉛負極板 → 外部負載 → 正極板；兩極消耗 SO₄²⁻、正極消耗 H⁺，硫酸濃度下降。':'電子：鋅負極 → 外電路 → 正極；碳棒／金屬棒只協助集流。'}</p></section>`;
- const notesHtml=`<details class="battery-detail-notes"><summary>構造、反應與來源</summary><p>剖面依教材印刷第 24–25 頁的材料位置繪製，未按比例。${index===2?'圖示為 5 片正負交錯並聯的約 2 V 液式單格（實物汽車電瓶常以 6 個單格串聯組成約 12 V）。放／充電離子與時間皆為定性示意，達終態即停止，未模擬過充與副反應。':index===0?'酸性電解質位在混合糊與隔紙內；實際反應會受放電條件影響，這裡省略後續配位反應。':'KOH 分布於膠與多孔材料內；本畫面採教材的 Mn₂O₃ 簡化式，非所有放電階段的完整機制。'}</p><p>核對：<a href="https://openstax.org/books/chemistry-atoms-first/pages/16-5-batteries-and-fuel-cells" target="_blank" rel="noreferrer">OpenStax 電池原理與剖面</a>；<a href="https://www.gs-battery.com.tw/en/knowhow-technicalmanual-4.php" target="_blank" rel="noreferrer">GS 原廠鉛蓄充放電反應</a>（2026-11-26）。</p></details>`;
+ const notesHtml=`<details class="battery-detail-notes"><summary>構造、反應與來源</summary><p>剖面依教材印刷第 24–25 頁的材料位置繪製，未按比例。${index===2?'圖示為 3 負 2 正、共 5 片交錯並聯的約 2 V 液式單格（負極板多一片，讓正極板兩面都對著負極板；實物汽車電瓶常以 6 個單格串聯組成約 12 V）。放／充電離子與時間皆為定性示意，預設暫停、按播放開始並於終態停止，未模擬過充與副反應。':index===0?'酸性電解質位在混合糊與隔紙內；實際反應會受放電條件影響，這裡省略後續配位反應。':'KOH 分布於膠與多孔材料內；本畫面採教材的 Mn₂O₃ 簡化式，非所有放電階段的完整機制。'}</p><p>核對：<a href="https://openstax.org/books/chemistry-atoms-first/pages/16-5-batteries-and-fuel-cells" target="_blank" rel="noreferrer">OpenStax 電池原理與剖面</a>；<a href="https://www.gs-battery.com.tw/en/knowhow-technicalmanual-4.php" target="_blank" rel="noreferrer">GS 原廠鉛蓄充放電反應</a>；<a href="https://www.bulldog-battery.com/wp-content/uploads/Bulldog-Battery-Service-Manual-12122024.pdf" target="_blank" rel="noreferrer">Bulldog 極板排列手冊</a>；<a href="https://www.curtisinstruments.com/evbatterymonitoring/" target="_blank" rel="noreferrer">Curtis 電池構造說明</a>（2026-11-26）。</p></details>`;
  if(index===2)return cutaway+`<div class="lead-footer"><div class="lead-footer-left"><div id="battery-part-note" class="part-note" role="status"><strong>${description[0]}</strong>　${description[1]}</div>${notesHtml}</div>${reactionHtml}</div>`;
  return cutaway+reactionHtml+notesHtml;
 }

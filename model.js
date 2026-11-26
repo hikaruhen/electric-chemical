@@ -6,7 +6,7 @@ export function liquidY(s){return s.mode==='cell'?332:323;}
 export function electrodeGeometry(s,i){const spec=electrodeSpec(s),top=s.electrodeY[i],bottom=top+spec.paintBottom,surface=s.mode==='water'?207+s.collectedGas[i]*7:liquidY(s);return {top,bottom,surface,wetDepth:Math.max(0,bottom-surface),immersed:bottom>surface,gap:surface-bottom};}
 export function setElectrodeY(s,i,y){const spec=electrodeSpec(s);let top=Math.max(spec.minY,Math.min(spec.maxY,y));const surface=electrodeGeometry(s,i).surface,gap=surface-(top+spec.paintBottom);if(gap>=0&&gap<18)top=surface-spec.paintBottom-18;s.electrodeY[i]=top;}
 export function toggleElectrode(s,i){const spec=electrodeSpec(s);setElectrodeY(s,i,electrodeGeometry(s,i).immersed?spec.removedY:spec.insertedY);}
-export function initial(mode='cell') {return {mode,playing:true,speed:1,time:0,extent:0,electrodeY:mode==='water'?[350,350]:[290,290],transportTime:0,gasPackets:[],gasBubbles:[],collectedGas:[0,0],nextGasGroup:1,gasTests:[null,null],wires:[['n','l'],['p','r']],observationPolarity:[-1,1],bridge:true,electrodes:mode==='cell'?['Zn','Cu']:mode==='plate'?['Fe','Cu']:['C','C'],solution:mode==='water'?'NaOH':mode==='cell'?'paired':'CuSO4',power:true,view:'electron',message:''};}
+export function initial(mode='cell') {return {mode,playing:false,speed:1,time:0,extent:0,electrodeY:mode==='water'?[350,350]:[290,290],transportTime:0,gasPackets:[],gasBubbles:[],collectedGas:[0,0],nextGasGroup:1,gasTests:[null,null],wires:[['n','l'],['p','r']],observationPolarity:[-1,1],bridge:true,electrodes:mode==='cell'?['Zn','Cu']:mode==='plate'?['Fe','Cu']:['C','C'],solution:mode==='water'?'NaOH':mode==='cell'?'paired':'CuSO4',power:true,view:'electron',message:''};}
 export function polarity(s) {return [0,1].map(i=>{const w=s.wires.find(w=>w.includes(i?'r':'l'));return w?.includes('n')?-1:w?.includes('p')?1:0;});}
 export function conditions(s) {
  if(s.mode==='batteries')return '選一種電池，試著分類與回收。';
@@ -55,7 +55,7 @@ export function tick(s,dt) {
  for(const p of s.gasPackets)if(!p.delivered&&s.transportTime-p.born>=GAS_TRAVEL_TIME){s.collectedGas[p.cat]+=2*p.oxygen;s.collectedGas[1-p.cat]+=p.oxygen;p.delivered=true;}
  return snapshot(s);
 }
-export function freshObservation(s,message='改裝後重新觀察：已清空先前產物與示意時間。') {s.time=0;s.extent=0;s.transportTime=0;s.gasPackets=[];s.gasBubbles=[];s.collectedGas=[0,0];s.nextGasGroup=1;s.gasTests=[null,null];s.message=message;}
+export function freshObservation(s,message='改裝後重新觀察：已清空先前產物與示意時間，請按「▶ 播放」開始。') {s.playing=false;s.time=0;s.extent=0;s.transportTime=0;s.gasPackets=[];s.gasBubbles=[];s.collectedGas=[0,0];s.nextGasGroup=1;s.gasTests=[null,null];s.message=message;}
 export function testCollectedGas(s,side){const q=snapshot(s);if(s.mode!=='water'||!q.chemistryKnown||![0,1].includes(side))return {ok:false,text:'條件不符，沒有可檢驗的氣體。'};const gas=q.gas[side];if(gas.volume<.1)return {ok:false,text:'尚未收集足量氣體：至少需要 0.10 mL 示意量，請先讓反應進行。'};return {ok:true,name:gas.name,volume:gas.volume,text:gas.name==='H₂'?'氫氣 H₂：虛擬檢驗出現爆鳴現象，顯示氫氣可燃。':'氧氣 O₂：虛擬檢驗顯示助燃，火焰更旺。'};}
 export function connect(s,a,b){if(a===b)return false;const source=x=>['n','p'].includes(x);if(source(a)===source(b))return false;if(s.wires.some(w=>w.includes(a)||w.includes(b)))return false;s.wires.push([a,b]);const after=polarity(s);if(after.every(Boolean)){if(s.mode!=='cell'&&s.observationPolarity&&after.some((v,i)=>v!==s.observationPolarity[i]))freshObservation(s);s.observationPolarity=[...after];}return true;}
 

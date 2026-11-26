@@ -1,1 +1,1 @@
-{"name":"electric-chemical-lab","version":"2.3.0","private":true,"type":"module","scripts":{"start":"node server.mjs","test":"node --test tests/model.test.mjs","build":"node scripts/prepare-pages.mjs","check:release":"node scripts/check-release.mjs"}}
+{"name":"electric-chemical-lab","version":"2.3.1","private":true,"type":"module","scripts":{"start":"node server.mjs","test":"node --test tests/model.test.mjs","build":"node scripts/prepare-pages.mjs","check:release":"node scripts/check-release.mjs"}}
