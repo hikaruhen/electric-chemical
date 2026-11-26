@@ -1,5 +1,5 @@
-import {MODES,initial,snapshot,tick,polarity,freshObservation,connect,testCollectedGas,GEOMETRY,electrodeSpec,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,GAS_TRAVEL_TIME,cellSolutions} from './model.js?v=2.4.1';
-import {batteryStructure,BATTERY_PARTS,updateLeadVisuals} from './battery-structure.js?v=2.4.1';
+import {MODES,initial,snapshot,tick,polarity,freshObservation,connect,testCollectedGas,GEOMETRY,electrodeSpec,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,GAS_TRAVEL_TIME,cellSolutions} from './model.js?v=2.5.0';
+import {batteryStructure,BATTERY_PARTS,updateLeadVisuals} from './battery-structure.js?v=2.5.0';
 const $=s=>document.querySelector(s), svg=$('#scene'), stage=$('#scene-stage'), hitsHost=$('#scene-hits');
 let state=initial(),pending=null,drag=null,popover=null,last=performance.now(),lastUI=0,batteryIndex=0,batteryPart='overview';
 state.observationPolarity=[-1,1];
@@ -39,7 +39,8 @@ function galvanometerSvg(){
   `<path d="M380.1 81.9 A39 39 0 0 1 439.9 81.9" fill="none" stroke="#859a92" stroke-width="1.3"/>`+
   ticks+
   text(410,65,'0',9.5,'#1f4d40',{'text-anchor':'middle','font-weight':'700'})+
-  text(410,95,'G',14,'#294d42',{'text-anchor':'middle','font-weight':'700'})+
+  text(410,95,'G',14,'#294d42',{'text-anchor':'middle','font-weight':'700',id:'meter-g'})+
+  text(410,95,'— 未推算',13,'#8b4d12',{'text-anchor':'middle','font-weight':'700',id:'meter-unknown',visibility:'hidden'})+
   el('line',{id:'needle',x1:410,y1:107,x2:410,y2:68,stroke:'#c73b2b','stroke-width':2.5,'stroke-linecap':'round'})+
   el('circle',{cx:410,cy:107,r:4.3,fill:'#263733',stroke:'#c7d4ce','stroke-width':1.4})+
   `<polygon points="338,56 392,56 364,108 338,108" fill="#ffffff" fill-opacity="0.28" pointer-events="none"/>`+
@@ -56,6 +57,7 @@ function makeScene(){
   for(let side=0;side<2;side++){
    const x=side?450:130,sol=sols[side],lbl=cellSolLabel[sol],liqId=side?'right-liquid':'left-liquid';
    h+=`<g id="solution-target-${side}" class="tappable" data-action="solution-${side}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${side?'右':'左'}杯溶液（${lbl}），點選更換${side?'右':'左'}杯溶液">`+
+    el('rect',{x:x+3,y:332,width:214,height:140,rx:10,fill:'#eef5f4','pointer-events':'none'})+
     el('rect',{id:liqId,x:x+3,y:332,width:214,height:140,rx:10,fill:cellSolFill[sol],'data-solution':sol})+
     el('rect',{x:x+3,y:472,width:214,height:58,fill:'transparent'})+
     el('line',{x1:x,y1:332,x2:x+220,y2:332,stroke:'#71b2c2','stroke-width':2,'pointer-events':'none'})+
@@ -192,20 +194,60 @@ function drawWires(){
 }
 function updateDynamic(){
  if(state.mode==='batteries')return;const q=snapshot(state),phase=state.time*.38;
- for(let i=0;i<12;i++){const node=$(`#electron-${i}`),index=i<6?0:1,w=state.wires[index],path=$(`#wire-${index}`),current=state.view==='current';node.classList.toggle('is-current',current);node.style.visibility=q.valid&&state.view!=='none'&&path&&(!current||i%6<3)?'visible':'hidden';if(!path||!w)continue;const electrode=w.includes('l')?0:1,sign=q.cell?(electrode===0?-1:1):q.signs[electrode];let forward=q.cell?electrode===1:sign<0;if(!['n','p'].includes(w[0]))forward=!forward;if(current)forward=!forward;const t=((i%6)/(current?3:6)+phase)%1,len=path.getTotalLength(),distance=(forward?t:1-t)*len,p=path.getPointAtLength(distance),u=path.getPointAtLength(Math.max(0,distance-2)),v=path.getPointAtLength(Math.min(len,distance+2)),angle=Math.atan2(v.y-u.y,v.x-u.x)*180/Math.PI+(forward?0:180);node.setAttribute('transform',`translate(${p.x} ${p.y})`);node.dataset.direction=forward?'forward':'backward';node.querySelector('.current-arrow').setAttribute('transform',`rotate(${angle})`);}
+ for(let i=0;i<12;i++){const node=$(`#electron-${i}`),index=i<6?0:1,w=state.wires[index],path=$(`#wire-${index}`),current=state.view==='current';node.classList.toggle('is-current',current);node.style.visibility=q.valid&&state.view!=='none'&&path&&(!current||i%6<3)?'visible':'hidden';if(!path||!w)continue;const electrode=w.includes('l')?0:1,sign=q.signs[electrode];let forward=q.cell?electrode===q.cuSide:sign<0;if(!['n','p'].includes(w[0]))forward=!forward;if(current)forward=!forward;const t=((i%6)/(current?3:6)+phase)%1,len=path.getTotalLength(),distance=(forward?t:1-t)*len,p=path.getPointAtLength(distance),u=path.getPointAtLength(Math.max(0,distance-2)),v=path.getPointAtLength(Math.min(len,distance+2)),angle=Math.atan2(v.y-u.y,v.x-u.x)*180/Math.PI+(forward?0:180);node.setAttribute('transform',`translate(${p.x} ${p.y})`);node.dataset.direction=forward?'forward':'backward';node.querySelector('.current-arrow').setAttribute('transform',`rotate(${angle})`);}
  const stopTag=state.playing?'目前停止':'已暫停';
- $('#flow-label').textContent=state.view==='none'?'':!q.chemistryKnown?'條件不符：不推算外電路流向':q.cell?(q.active?(state.view==='current'?'電流方向 I：銅 → 鋅（非粒子）':'外電路 e⁻：鋅 → 銅'):(state.view==='current'?`電流方向 I：銅 → 鋅（${stopTag}，方向說明）`:`外電路 e⁻：鋅 → 銅（${stopTag}，方向說明）`)):(q.active?(state.view==='current'?'電流方向 I：與電子相反（非粒子）':'e⁻：電源負端 → 負極；正極 → 電源正端'):(state.view==='current'?`${stopTag}（方向說明：I 與 e⁻ 相反）`:`${stopTag}（方向說明：e⁻ 負端→負極）`));
+ let flowText='';
+ if(state.view!=='none'){
+  if(q.cell){
+   if(q.chemistryKnown){
+    const eDir=q.znSide===0?'左鋅 → 右銅':'右鋅 → 左銅',iDir=q.znSide===0?'右銅 → 左鋅':'左銅 → 右鋅';
+    flowText=q.active?(state.view==='current'?`電流方向 I：${iDir}（非粒子）`:`外電路 e⁻：${eDir}`):(state.view==='current'?`電流方向 I：${iDir}（${stopTag}，方向說明）`:`外電路 e⁻：${eDir}（${stopTag}，方向說明）`);
+   }else if(q.hasLocal){
+    flowText=q.meterMode==='unknown'?'僅示範杯內置換；外電路電流未推算':q.symmetricZero?'對稱雙杯置換；理想淨外電流為 0':'僅示範杯內置換（外電路未接通）';
+   }else if(q.symmetricZero){
+    flowText=q.circuitClosed?'兩側條件對稱：理想淨外電流為 0':'外電路未接通';
+   }else{
+    flowText=q.meterMode==='unknown'?'外電路電流未在本模型推算':'外電路未接通（此組合外電流未推算）';
+   }
+  }else if(!q.chemistryKnown){
+   flowText='條件不符：不推算外電路流向';
+  }else{
+   flowText=q.active?(state.view==='current'?'電流方向 I：與電子相反（非粒子）':'e⁻：電源負端 → 負極；正極 → 電源正端'):(state.view==='current'?`${stopTag}（方向說明：I 與 e⁻ 相反）`:`${stopTag}（方向說明：e⁻ 負端→負極）`);
+  }
+ }
+ $('#flow-label').textContent=flowText;
  $('#flow-legend').innerHTML=state.view==='current'?'<i class="current-swatch">→</i>電流方向（非粒子）':'<i class="electron"></i>外電路電子';
  $('#sulfate-legend').hidden=q.water||(q.cell&&cellSolutions(state).every(v=>v==='water'));
  $('#nitrate-legend').hidden=!q.cell;
  $('#oh-legend').hidden=!q.water;
- if(q.cell){const deflected=q.valid&&(state.playing||state.time>0);$('#needle').setAttribute('x2',deflected?(polarity(state)[0]<0?436:384):410);$('#needle').setAttribute('y2',deflected?77:68);}
+ if(q.cell){
+  const galv=$('#galvanometer'),needle=$('#needle'),mg=$('#meter-g'),mu=$('#meter-unknown');
+  if(galv)galv.dataset.meterMode=q.meterMode;
+  if(q.meterMode==='unknown'){
+   needle.setAttribute('visibility','hidden');
+   mg?.setAttribute('visibility','hidden');
+   mu?.setAttribute('visibility','visible');
+  }else{
+   needle.setAttribute('visibility','visible');
+   needle.setAttribute('x2',String(q.needleX2));
+   needle.setAttribute('y2',q.meterMode==='deflected'?'77':'68');
+   mg?.setAttribute('visibility','visible');
+   mu?.setAttribute('visibility','hidden');
+  }
+ }
  const wired=polarity(state);
  for(let i=0;i<2;i++){const g=electrodeGeometry(state,i),x=i?570:250;const group=$(`#electrode-${i}`);group.setAttribute('transform',`translate(${x} ${g.top})`);group.dataset.immersed=String(g.immersed);group.dataset.bottom=g.bottom;group.dataset.surface=g.surface;group.dataset.gap=g.gap;
- const pole=$(`#pole-${i}`);pole.textContent=q.cell&&!q.chemistryKnown?'未判定':!q.cell&&!wired[i]?'未接線':q.signs[i]<0?'− 負極':'＋ 正極';
+ const pole=$(`#pole-${i}`);
+ if(q.cell){pole.textContent=q.chemistryKnown?(q.signs[i]<0?'− 負極':'＋ 正極'):q.local[i].enabled?'杯內置換':q.symmetricZero?'對稱無極差':'未推算';}
+ else{pole.textContent=!wired[i]?'未接線':q.signs[i]<0?'− 負極':'＋ 正極';}
  if(q.water&&g.top<110){pole.setAttribute('x',i?592:228);pole.setAttribute('text-anchor',i?'start':'end');pole.setAttribute('y',Math.max(118,g.top+52));}else{pole.setAttribute('x',x);pole.setAttribute('text-anchor','middle');pole.setAttribute('y',Math.max(36,g.top-43));}
- const deposit=$(`#deposit-${i}`);if(state.electrodes[i]==='Fe')deposit.setAttribute('stroke-width',q.masses[i]>0?Math.min(8,state.extent*12):0);else deposit.setAttribute('opacity',q.masses[i]>0?Math.min(.95,state.extent*3):0);
- $(`#material-label-${i}`).textContent=q.water?'':material[state.electrodes[i]]+(!g.immersed?'（未浸入）':q.water?'':q.masses[i]>0?' · 銅析出':q.masses[i]<0?' · 溶解':'');
+ const deposit=$(`#deposit-${i}`);
+ if(q.cell){
+  const depExt=q.chemistryKnown&&i===q.cuSide?state.extent:q.local[i].enabled?q.local[i].extent:0;
+  deposit.setAttribute('opacity',depExt>0?Math.min(.95,depExt*3):0);
+ }else if(state.electrodes[i]==='Fe')deposit.setAttribute('stroke-width',q.masses[i]>0?Math.min(8,state.extent*12):0);
+ else deposit.setAttribute('opacity',q.masses[i]>0?Math.min(.95,state.extent*3):0);
+ $(`#material-label-${i}`).textContent=q.water?'':!g.immersed?material[state.electrodes[i]]+'（未浸入）':q.cell&&q.local[i].enabled?(q.local[i].extent>0||q.local[i].active?'鋅溶解・表面析銅':'鋅片 Zn · 待置換'):material[state.electrodes[i]]+(q.masses[i]>0?' · 銅析出':q.masses[i]<0?' · 溶解':'');
  if(q.water){$('#insulated-lead-'+i).setAttribute('d',insulatedLead(i));const front=207+q.gas[i].volume*7;$(`#tube-water-${i}`).setAttribute('y',front);$(`#tube-water-${i}`).setAttribute('height',430-front);$(`#tube-surface-${i}`).setAttribute('y1',front);$(`#tube-surface-${i}`).setAttribute('y2',front);$(`#gas-label-${i}`).textContent=q.chemistryKnown?`${q.gas[i].name==='H₂'?'氫氣 H₂':'氧氣 O₂'} ${q.gas[i].volume>0?((q.active||q.inFlight)&&state.playing?'集氣增加':'已有集氣'):'等待集氣'}`:'尚無氣體';}
  }
  if(q.cell){
@@ -213,7 +255,8 @@ function updateDynamic(){
   for(let side=0;side<2;side++){
    const liq=$(side?'#right-liquid':'#left-liquid');if(!liq)continue;
    liq.setAttribute('fill',cellSolFill[sols[side]]);
-   liq.setAttribute('opacity',q.chemistryKnown&&side===1?.18+.82*q.concentration/.1:1);
+   const op=q.chemistryKnown&&side===q.cuSide?Math.max(0,1-state.extent):q.local[side].enabled?Math.max(0,1-q.local[side].extent):1;
+   liq.setAttribute('opacity',op);
    liq.dataset.solution=sols[side];
   }
  }else if(!q.water){
@@ -231,26 +274,67 @@ function updateSaltFlow(q){
  if(q.active){while(state.time+1e-9>=view.next){const born=view.next;for(let side=0;side<2;side++)view.ions.push({id:view.serial++,side,born});view.next+=2.4;}view.ions=view.ions.slice(-16);}
  const host=$('#salt-particles'),alive=new Set(),anchors=[null,null],bridgeOffset=drag?.id==='bridge'?(drag.bridgeOffset??(state.bridge?0:BRIDGE_REMOVED)):state.bridge?0:BRIDGE_REMOVED;
  $('#salt-bridge text')?.setAttribute('y',bridgeOffset<-30?284:240);
- for(const ion of view.ions){const id='salt-ion-'+ion.id,nitrate=ion.side===1,age=Math.max(0,state.time-ion.born),t=Math.min(1,age/6),path=$(nitrate?'#salt-route-left':'#salt-route-right'),p=path.getPointAtLength(path.getTotalLength()*t),exited=p.y>=393,offset=exited?0:bridgeOffset,settle=1-Math.exp(-Math.max(0,age-6)/2),driftAge=Math.max(0,age-6),slot=Math.floor(ion.id/2)%8,targetX=(nitrate?280:495)+(slot%3)*22,targetY=353+Math.floor(slot/3)*35,x=p.x+(targetX-p.x+3*Math.sin(driftAge*.55+ion.id))*settle,y=p.y+offset+(targetY-p.y+3*Math.sin(driftAge*.45+ion.id*.85))*settle;
-  alive.add(id);let node=$('#'+id);if(!node){node=document.createElementNS('http://www.w3.org/2000/svg','g');node.id=id;node.dataset.species=nitrate?'NO₃⁻':'K⁺';node.dataset.born=ion.born;node.setAttribute('aria-label',nitrate?'硝酸根離子 NO₃⁻ → 鋅杯':'鉀離子 K⁺ → 銅杯');node.innerHTML=`<circle r="7" fill="${nitrate?'#fde3c6':'#c1eadc'}" stroke="${nitrate?'#c46210':'#2c6550'}" stroke-width="1.6"/><text x="0" y="3" text-anchor="middle" font-size="${nitrate?9:10}" font-weight="600" fill="${nitrate?'#6e3204':'#1b4737'}">${nitrate?'NO₃⁻':'K⁺'}</text>`;host.append(node);}node.setAttribute('transform',`translate(${x} ${y})`);node.setAttribute('opacity',Math.max(0,Math.min(1,(19.2-age)/1.2)));node.dataset.stage=exited?'cup':'bridge';node.querySelector('circle').setAttribute('r',7+6*settle);node.querySelector('text').setAttribute('opacity',settle);if(!exited||!anchors[ion.side])anchors[ion.side]={x,y};
+ const znSide=q.znSide??0,cuSide=q.cuSide??1;
+ for(const ion of view.ions){const id='salt-ion-'+ion.id,nitrate=ion.side===1,toLeft=nitrate?znSide===0:cuSide===0,age=Math.max(0,state.time-ion.born),t=Math.min(1,age/6),path=$(toLeft?'#salt-route-left':'#salt-route-right'),p=path.getPointAtLength(path.getTotalLength()*t),exited=p.y>=393,offset=exited?0:bridgeOffset,settle=1-Math.exp(-Math.max(0,age-6)/2),driftAge=Math.max(0,age-6),slot=Math.floor(ion.id/2)%8,targetX=(toLeft?280:495)+(slot%3)*22,targetY=353+Math.floor(slot/3)*35,x=p.x+(targetX-p.x+3*Math.sin(driftAge*.55+ion.id))*settle,y=p.y+offset+(targetY-p.y+3*Math.sin(driftAge*.45+ion.id*.85))*settle;
+  alive.add(id);let node=$('#'+id);if(!node){node=document.createElementNS('http://www.w3.org/2000/svg','g');node.id=id;node.dataset.species=nitrate?'NO₃⁻':'K⁺';node.dataset.born=ion.born;node.setAttribute('aria-label',nitrate?'硝酸根離子 NO₃⁻ → 鋅杯':'鉀離子 K⁺ → 銅杯');node.innerHTML=`<circle r="7" fill="${nitrate?'#fde3c6':'#c1eadc'}" stroke="${nitrate?'#c46210':'#2c6550'}" stroke-width="1.6"/><text x="0" y="3" text-anchor="middle" font-size="${nitrate?9:10}" font-weight="600" fill="${nitrate?'#6e3204':'#1b4737'}">${nitrate?'NO₃⁻':'K⁺'}</text>`;host.append(node);}node.dataset.targetSide=String(toLeft?0:1);node.setAttribute('transform',`translate(${x} ${y})`);node.setAttribute('opacity',Math.max(0,Math.min(1,(19.2-age)/1.2)));node.dataset.stage=exited?'cup':'bridge';node.querySelector('circle').setAttribute('r',7+6*settle);node.querySelector('text').setAttribute('opacity',settle);if(!exited||!anchors[ion.side])anchors[ion.side]={x,y};
  }
  for(const n of [...host.children])if(!alive.has(n.id))n.remove();
- for(let side=0;side<2;side++){const n=$('#salt-key-'+side),left=side===1,labelX=left?341:357,labelY=Math.max(left?264:226,(left?334:290)+bridgeOffset),anchor=anchors[side]||{x:left?335:485,y:300+bridgeOffset};n.querySelector('.salt-ion-caption').setAttribute('transform',`translate(${labelX} ${labelY})`);n.querySelector('.salt-ion-leader').setAttribute('d',`M${anchor.x} ${anchor.y} H${left?350:470} V${labelY} H${left?341:465}`);}
+ for(let side=0;side<2;side++){const n=$('#salt-key-'+side);if(!n)continue;n.style.visibility=q.chemistryKnown?'visible':'hidden';const nitrate=side===1,toLeft=nitrate?znSide===0:cuSide===0,boxW=nitrate?138:108,labelX=toLeft?341:465-boxW,labelY=Math.max(toLeft?264:226,(toLeft?334:290)+bridgeOffset),anchor=anchors[side]||{x:toLeft?335:485,y:300+bridgeOffset};n.dataset.targetSide=String(toLeft?0:1);n.querySelector('.salt-ion-caption').setAttribute('transform',`translate(${labelX} ${labelY})`);n.querySelector('.salt-ion-leader').setAttribute('d',`M${anchor.x} ${anchor.y} H${toLeft?350:470} V${labelY} H${toLeft?341:465}`);}
 }
 function updateReadings(){const q=snapshot(state),m=state.mode;if(m==='batteries')return;
  for(let i=0;i<2;i++)$(`#immerse-${i?'right':'left'}`).textContent=(electrodeGeometry(state,i).immersed?'移出':'浸回')+(i?'右':'左')+'電極';
  const bridgeIn=drag?.id==='bridge'?(drag.bridgeOffset??(state.bridge?0:BRIDGE_REMOVED))>BRIDGE_THRESHOLD:state.bridge;$('#bridge').textContent=bridgeIn?'移除鹽橋':'裝回鹽橋';
- const hasProgress=state.time>0||state.extent>0||state.transportTime>0;
- const status=(q.reason&&q.inFlight&&state.playing?q.reason+' 已生成氣泡繼續集氣。':q.reason)||(state.playing?'反應中':hasProgress?'已暫停':'已暫停（按「▶ 播放」開始）');$('#status').textContent=pending?'已選接點。點另一個空接點完成接線，或按「取消接線」／Esc。':status;$('#status').classList.toggle('blocked',!!q.reason||!!pending);$('#clock').textContent=`示意時間 ${state.time.toFixed(1)} s`;$('#detail-clock').textContent=$('#clock').textContent;
+ const hasProgress=state.time>0||state.extent>0||state.transportTime>0||(state.localExtent?.some(v=>v>0));
+ let status='',blocked=false;
+ if(pending){status='已選接點。點另一個空接點完成接線，或按「取消接線」／Esc。';blocked=true;}
+ else if(q.cell&&q.hasLocal){
+  const enabledLoc=q.local.filter(l=>l.enabled),anyLocalActive=q.localActive.some(Boolean),anyReady=enabledLoc.some(l=>l.ready),allDepleted=enabledLoc.every(l=>l.depleted),allOut=enabledLoc.every(l=>!l.immersed);
+  const extNote=q.meterMode==='unknown'?'外電流未推算':q.symmetricZero?'兩側對稱，理想淨外電流為 0':'外電路未接通';
+  if(allDepleted){status=`杯內置換的銅離子已耗盡（教學示意上限）；${extNote}。請重設。`;blocked=true;}
+  else if(allOut){status=`鋅片未浸入硫酸銅，杯內置換已暫停；${extNote}。`;blocked=true;}
+  else if(anyLocalActive){status=`杯內直接置換中（鋅溶解・表面析銅，不需外電路或鹽橋）；${extNote}。`;}
+  else if(anyReady){status=hasProgress?`已暫停（杯內置換保留進度；${extNote}）`:`已暫停（按「▶ 播放」開始杯內直接置換；${extNote}）`;}
+ }else{
+  status=(q.reason&&q.inFlight&&state.playing?q.reason+' 已生成氣泡繼續集氣。':q.reason)||(state.playing?'反應中':hasProgress?'已暫停':'已暫停（按「▶ 播放」開始）');
+  blocked=!!q.reason;
+ }
+ $('#status').textContent=status;$('#status').classList.toggle('blocked',blocked);$('#clock').textContent=`示意時間 ${state.time.toFixed(1)} s`;$('#detail-clock').textContent=$('#clock').textContent;
  $('#notice').textContent=state.message;$('#play').textContent=state.playing?'Ⅱ 暫停':hasProgress?'▶ 繼續':'▶ 播放';
- let readings=q.water?[['左管 '+q.gas[0].name,'≈ '+q.gas[0].volume.toFixed(2)+' mL','同溫同壓的示意體積'],['右管 '+q.gas[1].name,'≈ '+q.gas[1].volume.toFixed(2)+' mL','更改接法會清空舊氣體'],['生成體積比 H₂：O₂','2 : 1','同溫同壓；兩管讀值為近似值']]:[['左極質量變化',fmt(q.masses[0])+' g','相對本次觀察開始'],['右極質量變化',fmt(q.masses[1])+' g','相對本次觀察開始'],['Cu²⁺ 濃度',q.concentration.toFixed(3)+' M',q.cell?'右杯（初始 0.100 M）':'溶液（初始 0.200 M）']];
- const supported=q.chemistryKnown;
- $('#readings').innerHTML=readings.map(([a,b,c])=>`<div class="reading"><small>${a}</small><b>${supported?b:'—'}</b><span>${supported?c:'條件不符，不推算讀值'}</span></div>`).join('');
- $('#reactions').innerHTML=q.half.map((r,i)=>`<div class="reaction"><strong>${i?'右':'左'}極 · ${q.cell?(i===0?'氧化（失電子）':'還原（得電子）'):q.signs[i]<0?'還原（得電子）':q.signs[i]>0?'氧化（失電子）':'未接線'}${q.reason?' · 目前停止':''}</strong><code>${supported?r:'條件未成立，不推算反應'}</code></div>`).join('');
- $('#cause').textContent=q.reason?q.reason:q.cell?'鋅溶解成 Zn²⁺，銅離子得電子析出銅；右杯藍色漸淡。鹽橋陰離子 NO₃⁻ 往鋅杯、陽離子 K⁺ 往銅杯移動，以維持電中性。':q.water?'水分解為氫氣與氧氣；負極氣體可燃，正極氣體助燃。Na⁺ 只移動，不析出鈉；OH⁻ 在正極參與反應。':q.cuAn?'負極析出銅，正極溶出等莫耳銅離子；兩極銅的質量變化大小相同，溶液藍色大致不變。':'負極析出銅，碳正極發生水的氧化並產生氧氣；Cu²⁺ 被消耗，溶液藍色漸淡。碳棒視為理想惰性電極。';
  const trendMass=n=>n>0?(q.active?'增加':'已增加'):n<0?(q.active?'減少':'已減少'):'尚無變化';
- const trend=q.water?`<div><span>負極 · 氫氣 H₂</span><b>${q.gas.some(g=>g.volume>0)?'已有集氣':'等待集氣'}</b></div><div><span>正極 · 氧氣 O₂</span><b>生成體積比 2 : 1</b></div>`:`<div><span>左極質量</span><b>${supported?trendMass(q.masses[0]):'條件不符'}</b></div><div><span>右極質量</span><b>${supported?trendMass(q.masses[1]):'條件不符'}</b></div><div><span>溶液藍色</span><b>${!supported?'條件不符':q.concentration<(q.cell?.1:.2)-1e-10?(q.active?'變淡':'已變淡'):'不變'}</b></div>`;
- $('#trends').innerHTML=trend;
+ if(q.cell&&q.hasLocal){
+  const locCards=[0,1].map(side=>{
+   const l=q.local[side],sideName=side?'右':'左';
+   if(l.enabled)return [`${sideName}極（杯內置換淨重）`,fmt(l.netMass)+' g',`溶鋅 ${fmt(l.znDissolvedMass)} g · 析銅 ${fmt(l.cuDepositedMass)} g`];
+   return [`${sideName}極變化`,q.meterMode==='unknown'?'—':'0.000 g',q.meterMode==='unknown'?'外電路未推算，不斷言不變':'外電路未接通'];
+  });
+  const bothLocal=q.local[0].enabled&&q.local[1].enabled,onlySide=q.local[0].enabled?0:1;
+  const concCard=bothLocal?['左右杯 Cu²⁺ 濃度',`${q.local[0].concentration.toFixed(3)} / ${q.local[1].concentration.toFixed(3)} M`,'雙杯各自置換（各 50 mL、初始 0.100 M）']:[`${onlySide?'右':'左'}杯 Cu²⁺ 濃度`,q.local[onlySide].concentration.toFixed(3)+' M',`杯內置換示意（初始 0.100 M；${q.meterMode==='unknown'?'外電路未推算':'不需外電路或鹽橋'}）`];
+  $('#readings').innerHTML=[...locCards,concCard].map(([a,b,c])=>`<div class="reading"><small>${a}</small><b>${b}</b><span>${c}</span></div>`).join('');
+  $('#reactions').innerHTML=[0,1].map(side=>{
+   const l=q.local[side],sideName=side?'右':'左';
+   if(l.enabled)return `<div class="reaction"><strong>${sideName}杯 · 杯內直接置換${l.active?'':' · 目前停止'}</strong><code>Zn(s) + Cu²⁺(aq) → Zn²⁺(aq) + Cu(s)</code></div>`;
+   return `<div class="reaction"><strong>${sideName}杯 · ${q.meterMode==='unknown'?'外電路未推算':'無外電路反應'}</strong><code>${q.meterMode==='unknown'?'外電路機制未建模，不推算反應':'外電路未接通，無跨杯反應'}</code></div>`;
+  }).join('');
+  $('#cause').textContent=`鋅片浸於硫酸銅溶液會直接發生單置換：每消耗 1 mol Zn（65.38 g）與 1 mol Cu²⁺，同時在鋅表面析出 1 mol Cu（63.546 g），因此附著銅層時固體淨重微減 n×(63.546−65.38) g，且不需外導線或鹽橋。單杯以 50 mL、0.100 M（0.005 mol）為示意上限，速率為教學示意。${q.reason}`;
+  const locTrend=[0,1].map(side=>{
+   const l=q.local[side],sideName=side?'右':'左';
+   if(l.enabled){const st=!l.immersed?'未浸入（已暫停）':l.depleted?'銅離子已耗盡':l.active?'鋅溶解・表面析銅':l.extent>0?'已溶解並析銅':'待置換';return `<div><span>${sideName}極（局部）</span><b>${st}</b></div>`;}
+   return `<div><span>${sideName}極變化</span><b>${q.meterMode==='unknown'?'未推算':'外電路開路'}</b></div>`;
+  }).join('');
+  const blueTrend=bothLocal?`<div><span>左右杯藍色</span><b>${q.local.some(l=>l.active)?'變淡':q.local.some(l=>l.extent>0)?'已變淡':'尚無變化'}</b></div>`:`<div><span>${onlySide?'右':'左'}杯藍色（局部）</span><b>${q.local[onlySide].active?'變淡':q.local[onlySide].extent>0?'已變淡':'尚無變化'}</b></div>${q.meterMode==='unknown'?'<div><span>外電路通道</span><b>未推算</b></div>':''}`;
+  $('#trends').innerHTML=locTrend+blueTrend;
+ }else{
+  const cuCupName=q.cuSide?'右':'左',znCupName=q.znSide?'右':'左';
+  const readings=q.water?[['左管 '+q.gas[0].name,'≈ '+q.gas[0].volume.toFixed(2)+' mL','同溫同壓的示意體積'],['右管 '+q.gas[1].name,'≈ '+q.gas[1].volume.toFixed(2)+' mL','更改接法會清空舊氣體'],['生成體積比 H₂：O₂','2 : 1','同溫同壓；兩管讀值為近似值']]:[['左極質量變化',fmt(q.masses[0])+' g','相對本次觀察開始'],['右極質量變化',fmt(q.masses[1])+' g','相對本次觀察開始'],['Cu²⁺ 濃度',q.concentration!==null?q.concentration.toFixed(3)+' M':'—',q.cell?`${cuCupName}杯（初始 0.100 M）`:'溶液（初始 0.200 M）']];
+  const supported=q.chemistryKnown;
+  const fallbackNote=q.cell&&q.symmetricZero?'理想對稱半電池，淨外電流為 0':'未在本模型推算';
+  $('#readings').innerHTML=readings.map(([a,b,c])=>`<div class="reading"><small>${a}</small><b>${supported?b:'—'}</b><span>${supported?c:fallbackNote}</span></div>`).join('');
+  $('#reactions').innerHTML=q.half.map((r,i)=>`<div class="reaction"><strong>${i?'右':'左'}極 · ${q.cell?(supported?(i===q.znSide?'氧化（失電子）':'還原（得電子）'):(q.symmetricZero?'對稱零電動勢':'未推算')):q.signs[i]<0?'還原（得電子）':q.signs[i]>0?'氧化（失電子）':'未接線'}${q.reason?' · 目前停止':''}</strong><code>${supported?r:fallbackNote}</code></div>`).join('');
+  $('#cause').textContent=q.reason?q.reason:q.cell?`鋅溶解成 Zn²⁺，銅離子得電子析出銅；${cuCupName}杯藍色漸淡。鹽橋陰離子 NO₃⁻ 往${znCupName}鋅杯、陽離子 K⁺ 往${cuCupName}銅杯移動，以維持電中性。`:q.water?'水分解為氫氣與氧氣；負極氣體可燃，正極氣體助燃。Na⁺ 只移動，不析出鈉；OH⁻ 在正極參與反應。':q.cuAn?'負極析出銅，正極溶出等莫耳銅離子；兩極銅的質量變化大小相同，溶液藍色大致不變。':'負極析出銅，碳正極發生水的氧化並產生氧氣；Cu²⁺ 被消耗，溶液藍色漸淡。碳棒視為理想惰性電極。';
+  const unmodeledTag=q.cell&&q.symmetricZero?'對稱無淨變化':'未推算';
+  const trend=q.water?`<div><span>負極 · 氫氣 H₂</span><b>${q.gas.some(g=>g.volume>0)?'已有集氣':'等待集氣'}</b></div><div><span>正極 · 氧氣 O₂</span><b>生成體積比 2 : 1</b></div>`:`<div><span>左極質量</span><b>${supported?trendMass(q.masses[0]):unmodeledTag}</b></div><div><span>右極質量</span><b>${supported?trendMass(q.masses[1]):unmodeledTag}</b></div><div><span>${q.cell&&supported?cuCupName+'杯藍色':'溶液藍色'}</span><b>${!supported?unmodeledTag:q.concentration<(q.cell?.1:.2)-1e-10?(q.active?'變淡':'已變淡'):'不變'}</b></div>`;
+  $('#trends').innerHTML=trend;
+ }
  $('#open-details').textContent=m==='water'?'讀值與氣體檢驗':'讀值與反應';$('#gas-tests').hidden=m!=='water';for(let i=0;i<2;i++)$(`#gas-result-${i}`).textContent=state.gasTests?.[i]?.text||'尚未檢驗';
 }
 function render(){
@@ -492,7 +576,7 @@ document.addEventListener('keydown',e=>{
  if(popover){e.preventDefault();closePopover({restoreFocus:true});return;}
  if(!document.querySelector('dialog[open]'))cancelDrag();
 });
-$('#guide-content').innerHTML=`<h3>先玩，再問為什麼</h3><p>每個實驗載入時皆已備好預設裝置並先暫停，按「▶ 播放」即開始反應。途中可隨時「Ⅱ 暫停」，再直接操作裝置來比較。</p><ul><li>電極與鹽橋：直接上下拖曳本體即可移出或浸入（不需切換模式），接線保留；鍵盤聚焦後可按 ↑ 移出、↓ 浸回。點選電極開啟材料選單；點選溶液或直流電源／檢流計開啟對應選單；右側「更多條件」收合提供備援清單。</li><li>接線：點一個空接點再點另一端，或從接點直接拖到另一接點；點導線即可拆除。落空不刪原線，多指、Esc 或「取消接線」可安全取消。</li><li>換電極、溶液與電解反接會清空本輪產物及時間並回到暫停（鋅銅反接保留產物並暫停）。拆線、電源開關、移出、暫停或關閉未改條件的選單皆保留已有進度與原本播放意願；切換實驗保留進度並先暫停；「重設」回復預設裝置並待播放。</li></ul><h3>模型的範圍</h3><p>這是教材條件下的理想化趨勢模型，時間、粒子密度、氣泡數、鍍層厚度、檢流計偏轉皆為示意；鹽橋離子持續分批示意，最多保留16個，舊批次在杯內淡出而非跳回橋內。硫酸根（SO₄²⁻，紫系）與硝酸根（NO₃⁻，橙系）以不同色系搭配完整化學式區分。傳統電流箭頭只表示方向，不是物質；箭頭速度與密度不代表真實電流大小，亦非實驗速率或實物精密讀值。無實際電壓、電阻、電流及溫度求解。電子只出現在外電路；溶液內移動的是離子。暫停時所有動態凍結，條件缺少時停止新反應；非反應離子保留，已形成的氣泡繼續收集。</p><table><tr><th>裝置</th><th>定量關係與停止界線</th></tr><tr><td>鋅銅電池</td><td>各 50 mL、0.1 M 硫酸鹽；KNO₃ 鹽橋。每反應 1 mol Zn 消耗 1 mol Cu²⁺，n(e⁻)=2n(Cu)。最多 0.005 mol，銅離子耗盡即停止。</td></tr><tr><td>電解水</td><td>水＋NaOH、碳電極；鹼性半反應。相同溫壓，H₂ : O₂＝2 : 1。60 示意秒生成 20/10 mL；氣泡經 3 示意秒運送後收集，非水耗盡。</td></tr><tr><td>硫酸銅／電鍍</td><td>150 mL、0.2 M。60 示意秒對應 0.03 mol Cu；以銅正極補回同量銅離子，碳正極則消耗銅離子並產生氧氣。碳正極氧氣刻度僅示意。莫耳質量 Cu 63.546、Zn 65.38 g/mol。</td></tr></table><p>忽略過電位、極化、擴散限制、溶液體積改變、電極接觸電阻及副反應。純水非完全不導電，但在這個觀察尺度不顯示可測產氣。碳棒視為不消耗的惰性電極；電鍍以已清潔鐵物件理想附著，未模擬表面處理與鐵正極腐蝕。銅離子耗盡後不延伸假造反應。反接鐵物件為正極時，因副反應未建模，停止並提示。</p><h3>教材對照</h3><p>指定《02-114 國中自然3下（理化）備課 CH1》：印刷頁 19–23 鋅銅電池；24–25 電池構造；26–28 電解水；29–31 電解硫酸銅；32–33 電鍍。生活電池只做教材內的定性比較，鉛蓄單格展示 5 片交錯並聯極板（負極板多一片，讓正極板兩面都對著負極板）與 H⁺／SO₄²⁻ 放充電定性動畫，預設暫停、按播放開始、達終態即停止並可重置動畫，不預測市售產品性能。</p><h3>虛擬操作與實驗</h3><p>可點選左右收集氣體做虛擬檢驗，依當輪產物及收集量顯示性質；不提供實際點火操作。實際實驗需教師指導；硫酸銅與電鍍廢液須集中處理，不能倒進水槽。廢電池應交回收管道，不能投入一般垃圾。</p>`;
+$('#guide-content').innerHTML=`<h3>先玩，再問為什麼</h3><p>每個實驗載入時皆已備好預設裝置並先暫停，按「▶ 播放」即開始反應。途中可隨時「Ⅱ 暫停」，再直接操作裝置來比較。</p><ul><li>電極與鹽橋：直接上下拖曳本體即可移出或浸入（不需切換模式），接線保留；鍵盤聚焦後可按 ↑ 移出、↓ 浸回。點選電極開啟材料選單；點選溶液或直流電源／檢流計開啟對應選單；右側「更多條件」收合提供備援清單。</li><li>接線：點一個空接點再點另一端，或從接點直接拖到另一接點；點導線即可拆除。落空不刪原線，多指、Esc 或「取消接線」可安全取消。</li><li>換電極、溶液與電解反接會清空本輪產物及時間並回到暫停（鋅銅反接保留產物並暫停）。拆線、電源開關、移出、暫停或關閉未改條件的選單皆保留已有進度與原本播放意願；切換實驗保留進度並先暫停；「重設」回復預設裝置並待播放。</li></ul><h3>模型的範圍</h3><p>這是教材條件下的理想化趨勢模型，時間、粒子密度、氣泡數、鍍層厚度、檢流計偏轉皆為示意；鹽橋離子持續分批示意，最多保留16個，舊批次在杯內淡出而非跳回橋內。硫酸根（SO₄²⁻，紫系）與硝酸根（NO₃⁻，橙系）以不同色系搭配完整化學式區分。傳統電流箭頭只表示方向，不是物質；箭頭速度與密度不代表真實電流大小，亦非實驗速率或實物精密讀值。無實際電壓、電阻、電流及溫度求解。電子只出現在外電路；溶液內移動的是離子。暫停時所有動態凍結，條件缺少時停止新反應；非反應離子保留，已形成的氣泡繼續收集。</p><table><tr><th>裝置</th><th>定量關係與停止界線</th></tr><tr><td>鋅銅電池</td><td>各 50 mL、0.1 M 硫酸鹽；KNO₃ 鹽橋。標準與左右鏡像皆依化學角色派生（外線反接只改檢流計偏轉，不逆轉氧化還原）。每反應 1 mol Zn 消耗 1 mol Cu²⁺，n(e⁻)=2n(Cu)，最多 0.005 mol。若鋅片直接浸於硫酸銅，則在該杯獨立發生單置換（不需導線或鹽橋；固體淨重變化為 n×(63.546−65.38) g，速率僅教學示意）；其餘未建模外電路機制於檢流計顯示「— 未推算」，不假造為 0。</td></tr><tr><td>電解水</td><td>水＋NaOH、碳電極；鹼性半反應。相同溫壓，H₂ : O₂＝2 : 1。60 示意秒生成 20/10 mL；氣泡經 3 示意秒運送後收集，非水耗盡。</td></tr><tr><td>硫酸銅／電鍍</td><td>150 mL、0.2 M。60 示意秒對應 0.03 mol Cu；以銅正極補回同量銅離子，碳正極則消耗銅離子並產生氧氣。碳正極氧氣刻度僅示意。莫耳質量 Cu 63.546、Zn 65.38 g/mol。</td></tr></table><p>忽略過電位、極化、擴散限制、溶液體積改變、電極接觸電阻及副反應。純水非完全不導電，但在這個觀察尺度不顯示可測產氣。碳棒視為不消耗的惰性電極；電鍍以已清潔鐵物件理想附著，未模擬表面處理與鐵正極腐蝕。銅離子耗盡後不延伸假造反應。反接鐵物件為正極時，因副反應未建模，停止並提示。</p><h3>教材對照</h3><p>指定《02-114 國中自然3下（理化）備課 CH1》：印刷頁 19–23 鋅銅電池；24–25 電池構造；26–28 電解水；29–31 電解硫酸銅；32–33 電鍍。生活電池只做教材內的定性比較，鉛蓄單格展示 5 片交錯並聯極板（負極板多一片，讓正極板兩面都對著負極板）與 H⁺／SO₄²⁻ 放充電定性動畫，預設暫停、按播放開始、達終態即停止並可重置動畫，不預測市售產品性能。</p><h3>虛擬操作與實驗</h3><p>可點選左右收集氣體做虛擬檢驗，依當輪產物及收集量顯示性質；不提供實際點火操作。實際實驗需教師指導；硫酸銅與電鍍廢液須集中處理，不能倒進水槽。廢電池應交回收管道，不能投入一般垃圾。</p>`;
 $('#help').onclick=()=>{closePopover({restoreFocus:false});$('#guide').showModal();};$('#close-help').onclick=()=>$('#guide').close();
 $('#open-details').onclick=()=>{closePopover({restoreFocus:false});$('#details-dialog').showModal();};
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());
