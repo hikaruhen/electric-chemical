@@ -1,5 +1,5 @@
-import {MODES,initial,snapshot,tick,polarity,freshObservation,connect,testCollectedGas,GEOMETRY,electrodeSpec,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,GAS_TRAVEL_TIME} from './model.js?v=2.4.0';
-import {batteryStructure,BATTERY_PARTS,updateLeadVisuals} from './battery-structure.js?v=2.4.0';
+import {MODES,initial,snapshot,tick,polarity,freshObservation,connect,testCollectedGas,GEOMETRY,electrodeSpec,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,GAS_TRAVEL_TIME,cellSolutions} from './model.js?v=2.4.1';
+import {batteryStructure,BATTERY_PARTS,updateLeadVisuals} from './battery-structure.js?v=2.4.1';
 const $=s=>document.querySelector(s), svg=$('#scene'), stage=$('#scene-stage'), hitsHost=$('#scene-hits');
 let state=initial(),pending=null,drag=null,popover=null,last=performance.now(),lastUI=0,batteryIndex=0,batteryPart='overview';
 state.observationPolarity=[-1,1];
@@ -15,7 +15,10 @@ const intro={cell:['01 / 化學能 → 電能','讓鋅放出電子，看看鹽�
 const reminders={cell:'電子只沿外導線由鋅流向銅；鹽橋由離子導電。鋅是負極／氧化端，銅是正極／還原端。',water:'負極還原產生氫氣，正極氧化產生氧氣。相同溫度、壓力下，氫氣體積是氧氣的 2 倍。',copper:'負極都析出銅；碳正極產生氧氣，銅正極則溶解補充銅離子。不要把兩種正極的產物混在一起。',plate:'被鍍物接負極，鍍層金屬接正極，電鍍液含該金屬離子。銅正極減少，被鍍物增加。'};
 const eNames=['n','p','l','r'];
 const electrodeOptions=(m,i)=>m==='cell'?['Zn','Cu']:m==='water'?['C','Cu']:m==='plate'?i===0?['Fe','C','Cu']:['Cu','C','Fe']:['C','Cu'];
-const solutionOptions=m=>m==='cell'?[['paired','左硫酸鋅／右硫酸銅'],['water','兩杯純水（不支援）']]:m==='water'?[['NaOH','水＋NaOH（助導電）'],['water','純水（比較導電性）']]:[['CuSO4','硫酸銅水溶液'],['water','純水（沒有銅離子）']];
+const cellSolutionOptions=[['ZnSO4','硫酸鋅 ZnSO₄'],['CuSO4','硫酸銅 CuSO₄'],['water','純水']];
+const cellSolLabel={ZnSO4:'硫酸鋅 ZnSO₄',CuSO4:'硫酸銅 CuSO₄',water:'純水'};
+const cellSolFill={CuSO4:'url(#liquid)',ZnSO4:'#e2ece4',water:'#eef5f4'};
+const solutionOptions=m=>m==='water'?[['NaOH','水＋NaOH（助導電）'],['water','純水（比較導電性）']]:[['CuSO4','硫酸銅水溶液'],['water','純水（沒有銅離子）']];
 function el(tag,attrs={},content=''){return `<${tag} ${Object.entries(attrs).map(([k,v])=>`${k}="${v}"`).join(' ')}>${content}</${tag}>`;}
 const text=(x,y,t,size=15,fill='#284e43',extra={})=>el('text',{x,y,'font-size':size,fill,...extra},t);
 const fmt=n=>(n>=0?'+':'−')+Math.abs(n).toFixed(3);
@@ -48,18 +51,18 @@ function makeScene(){
  let h=`<defs><linearGradient id="liquid" x2="0" y2="1"><stop stop-color="#bce9ef"/><stop offset="1" stop-color="#61b7d1"/></linearGradient><linearGradient id="meter-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e8f0ea"/></linearGradient></defs>`;
  h+=el('rect',{x:45,y:485,width:730,height:10,rx:5,fill:'#d2dfcd'});
  if(cell){
+  const sols=cellSolutions(state);
   for(const x of [130,450])h+=el('path',{d:`M${x} 300 V457 Q${x} 477 ${x+20} 477 H${x+200} Q${x+220} 477 ${x+220} 457 V300`,fill:'#fff','fill-opacity':'.5',stroke:'#9eb9b1','stroke-width':3,'pointer-events':'none'});
-  const leftLbl=state.solution==='water'?'純水（未支援）':'硫酸鋅 ZnSO₄',rightLbl=state.solution==='water'?'純水（未支援）':'硫酸銅 CuSO₄';
-  h+=`<g id="solution-target" class="tappable" data-action="solution" tabindex="0" role="button" aria-haspopup="dialog" aria-label="溶液條件，點選更換溶液">`+
-   el('rect',{id:'left-liquid',x:133,y:332,width:214,height:140,rx:10,fill:'#e2ece4'})+
-   el('rect',{id:'right-liquid',x:453,y:332,width:214,height:140,rx:10,fill:'url(#liquid)'})+
-   el('line',{x1:130,y1:332,x2:350,y2:332,stroke:'#71b2c2','stroke-width':2,'pointer-events':'none'})+
-   el('line',{x1:450,y1:332,x2:670,y2:332,stroke:'#71b2c2','stroke-width':2,'pointer-events':'none'})+
-   el('rect',{x:164,y:494,width:152,height:32,rx:10,fill:'#edf4ee',stroke:'#bfd2c7','stroke-width':1.2})+
-   el('rect',{x:484,y:494,width:152,height:32,rx:10,fill:'#edf4ee',stroke:'#bfd2c7','stroke-width':1.2})+
-   text(240,515,leftLbl+' ▾',14.5,'#355b51',{'text-anchor':'middle'})+
-   text(560,515,rightLbl+' ▾',14.5,'#355b51',{'text-anchor':'middle'})+
-   '</g>';
+  for(let side=0;side<2;side++){
+   const x=side?450:130,sol=sols[side],lbl=cellSolLabel[sol],liqId=side?'right-liquid':'left-liquid';
+   h+=`<g id="solution-target-${side}" class="tappable" data-action="solution-${side}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${side?'右':'左'}杯溶液（${lbl}），點選更換${side?'右':'左'}杯溶液">`+
+    el('rect',{id:liqId,x:x+3,y:332,width:214,height:140,rx:10,fill:cellSolFill[sol],'data-solution':sol})+
+    el('rect',{x:x+3,y:472,width:214,height:58,fill:'transparent'})+
+    el('line',{x1:x,y1:332,x2:x+220,y2:332,stroke:'#71b2c2','stroke-width':2,'pointer-events':'none'})+
+    el('rect',{x:x+24,y:492,width:172,height:36,rx:10,fill:'#edf4ee',stroke:'#bfd2c7','stroke-width':1.2})+
+    text(x+110,515,lbl+' ▾',14.5,'#355b51',{'text-anchor':'middle'})+
+    '</g>';
+  }
  }else{
   const left=135,right=685;
   h+=el('path',{d:`M${left} 300 V458 Q${left} 478 ${left+20} 478 H${right-20} Q${right} 478 ${right} 458 V300`,fill:'#fff','fill-opacity':'.6',stroke:'#99b5ac','stroke-width':3,'pointer-events':'none'});
@@ -193,7 +196,7 @@ function updateDynamic(){
  const stopTag=state.playing?'目前停止':'已暫停';
  $('#flow-label').textContent=state.view==='none'?'':!q.chemistryKnown?'條件不符：不推算外電路流向':q.cell?(q.active?(state.view==='current'?'電流方向 I：銅 → 鋅（非粒子）':'外電路 e⁻：鋅 → 銅'):(state.view==='current'?`電流方向 I：銅 → 鋅（${stopTag}，方向說明）`:`外電路 e⁻：鋅 → 銅（${stopTag}，方向說明）`)):(q.active?(state.view==='current'?'電流方向 I：與電子相反（非粒子）':'e⁻：電源負端 → 負極；正極 → 電源正端'):(state.view==='current'?`${stopTag}（方向說明：I 與 e⁻ 相反）`:`${stopTag}（方向說明：e⁻ 負端→負極）`));
  $('#flow-legend').innerHTML=state.view==='current'?'<i class="current-swatch">→</i>電流方向（非粒子）':'<i class="electron"></i>外電路電子';
- $('#sulfate-legend').hidden=q.water;
+ $('#sulfate-legend').hidden=q.water||(q.cell&&cellSolutions(state).every(v=>v==='water'));
  $('#nitrate-legend').hidden=!q.cell;
  $('#oh-legend').hidden=!q.water;
  if(q.cell){const deflected=q.valid&&(state.playing||state.time>0);$('#needle').setAttribute('x2',deflected?(polarity(state)[0]<0?436:384):410);$('#needle').setAttribute('y2',deflected?77:68);}
@@ -205,8 +208,20 @@ function updateDynamic(){
  $(`#material-label-${i}`).textContent=q.water?'':material[state.electrodes[i]]+(!g.immersed?'（未浸入）':q.water?'':q.masses[i]>0?' · 銅析出':q.masses[i]<0?' · 溶解':'');
  if(q.water){$('#insulated-lead-'+i).setAttribute('d',insulatedLead(i));const front=207+q.gas[i].volume*7;$(`#tube-water-${i}`).setAttribute('y',front);$(`#tube-water-${i}`).setAttribute('height',430-front);$(`#tube-surface-${i}`).setAttribute('y1',front);$(`#tube-surface-${i}`).setAttribute('y2',front);$(`#gas-label-${i}`).textContent=q.chemistryKnown?`${q.gas[i].name==='H₂'?'氫氣 H₂':'氧氣 O₂'} ${q.gas[i].volume>0?((q.active||q.inFlight)&&state.playing?'集氣增加':'已有集氣'):'等待集氣'}`:'尚無氣體';}
  }
- const liquid=$('#right-liquid');if(liquid&&!q.water){liquid.setAttribute('opacity',state.solution==='water'?1:.18+.82*q.concentration/(q.cell?.1:.2));if(state.solution==='water')liquid.setAttribute('fill','#e2ece4');}
- const particles=microParticles(state),host=$('#micro-particles');for(const p of particles){let node=$('#micro-'+p.id);if(!node){node=document.createElementNS('http://www.w3.org/2000/svg','g');node.id='micro-'+p.id;node.innerHTML='<circle r="15" stroke-width="1.4"/>'+text(0,4,'',11.5,'#244c50',{'text-anchor':'middle','font-weight':'600'});host.append(node);}node.setAttribute('transform',`translate(${p.x} ${p.y})`);node.setAttribute('opacity',p.opacity);node.dataset.species=p.species;node.dataset.kind=p.kind;const isSulfate=p.species.includes('SO'),isOh=p.species==='OH⁻',label=node.querySelector('text'),circle=node.querySelector('circle');label.textContent=p.species;label.setAttribute('fill',p.kind==='metal'?'#4a280e':isSulfate?'#3b1d6e':isOh?'#574a1e':'#134454');circle.setAttribute('fill',p.kind==='metal'?'#c98d54':isSulfate?'#e6daf7':isOh?'#ece4c8':'#c1e7f3');circle.setAttribute('stroke',p.kind==='metal'?'#936137':isSulfate?'#6f42b5':isOh?'#8f7e43':'#1b7fa3');}
+ if(q.cell){
+  const sols=cellSolutions(state);
+  for(let side=0;side<2;side++){
+   const liq=$(side?'#right-liquid':'#left-liquid');if(!liq)continue;
+   liq.setAttribute('fill',cellSolFill[sols[side]]);
+   liq.setAttribute('opacity',q.chemistryKnown&&side===1?.18+.82*q.concentration/.1:1);
+   liq.dataset.solution=sols[side];
+  }
+ }else if(!q.water){
+  const liquid=$('#right-liquid');
+  if(liquid){liquid.setAttribute('opacity',state.solution==='water'?1:.18+.82*q.concentration/.2);liquid.setAttribute('fill',state.solution==='water'?'#e2ece4':'url(#liquid)');}
+ }
+ const particles=microParticles(state),host=$('#micro-particles'),aliveMicro=new Set();for(const p of particles){const id='micro-'+p.id;aliveMicro.add(id);let node=$('#'+id);if(!node){node=document.createElementNS('http://www.w3.org/2000/svg','g');node.id=id;node.innerHTML='<circle r="15" stroke-width="1.4"/>'+text(0,4,'',11.5,'#244c50',{'text-anchor':'middle','font-weight':'600'});host.append(node);}node.setAttribute('transform',`translate(${p.x} ${p.y})`);node.setAttribute('opacity',p.opacity);node.dataset.species=p.species;node.dataset.kind=p.kind;const isSulfate=p.species.includes('SO'),isOh=p.species==='OH⁻',label=node.querySelector('text'),circle=node.querySelector('circle');label.textContent=p.species;label.setAttribute('fill',p.kind==='metal'?'#4a280e':isSulfate?'#3b1d6e':isOh?'#574a1e':'#134454');circle.setAttribute('fill',p.kind==='metal'?'#c98d54':isSulfate?'#e6daf7':isOh?'#ece4c8':'#c1e7f3');circle.setAttribute('stroke',p.kind==='metal'?'#936137':isSulfate?'#6f42b5':isOh?'#8f7e43':'#1b7fa3');}
+ for(const child of [...host.children])if(!aliveMicro.has(child.id))child.remove();
  if(q.cell)updateSaltFlow(q);
  const gasHost=$('#gas-bubbles'),alive=new Set();for(const b of state.gasBubbles){const age=state.transportTime-b.born;if(age<0||age>=GAS_TRAVEL_TIME)continue;alive.add(b.id);let node=$('#'+b.id);if(!node){node=document.createElementNS('http://www.w3.org/2000/svg','circle');node.id=b.id;node.setAttribute('r',3.5);node.setAttribute('fill','#fff');node.setAttribute('fill-opacity','.1');node.setAttribute('stroke','#5d9ab1');gasHost.append(node);}let x,y;if(q.water){const front=207+q.gas[b.side].volume*7;x=b.side?552:268;y=b.originY+(front+5-b.originY)*age/GAS_TRAVEL_TIME;}else{x=b.side?550:270;y=b.originY+(327-b.originY)*age/GAS_TRAVEL_TIME;}node.setAttribute('cx',x);node.setAttribute('cy',y);node.setAttribute('opacity',Math.min(1,age/.15,(GAS_TRAVEL_TIME-age)/.15));node.dataset.side=b.side;node.dataset.born=b.born;}
  for(const child of [...gasHost.children])if(!alive.has(child.id))child.remove();
@@ -241,7 +256,14 @@ function updateReadings(){const q=snapshot(state),m=state.mode;if(m==='batteries
 function render(){
  const m=state.mode;$('#tabs').innerHTML=Object.entries(MODES).map(([id,name])=>`<button data-mode="${id}" role="tab" aria-selected="${m===id}">${name}</button>`).join('');$('#title').textContent=MODES[m];$('#eyebrow').textContent=intro[m][0];$('#subtitle').textContent=intro[m][1];$('#scene-name').textContent=MODES[m];$('#lab').hidden=m==='batteries';$('#battery-room').hidden=m!=='batteries';if(m==='batteries'){renderBattery();return;}
  for(let i=0;i<2;i++){const opts=electrodeOptions(m,i);const sel=$(i?'#right-electrode':'#left-electrode');sel.innerHTML=opts.map(v=>`<option value="${v}">${material[v]}</option>`).join('');sel.value=state.electrodes[i];$(`#immerse-${i?'right':'left'}`).textContent=(electrodeGeometry(state,i).immersed?'移出':'浸回')+(i?'右':'左')+'電極';}
- $('#solution').innerHTML=solutionOptions(m).map(([v,t])=>`<option value="${v}">${t}</option>`).join('');$('#solution').value=state.solution;$('#bridge').hidden=m!=='cell';$('#bridge').textContent=state.bridge?'移除鹽橋':'裝回鹽橋';$('#power').hidden=m==='cell';$('#power').textContent=state.power?'關閉直流電源':'開啟直流電源';$('#speed').value=state.speed;$('#view').value=state.view;$('#setup-note').textContent='換電極、溶液或反接會開始新一輪觀察；拆線、移出電極與暫停則保留已有產物。';$('#reminder').textContent=reminders[m];
+ $('#cell-solutions-row').hidden=m!=='cell';$('#single-solution-row').hidden=m==='cell';
+ if(m==='cell'){
+  const sols=cellSolutions(state);
+  for(let i=0;i<2;i++){const sel=$(i?'#right-solution':'#left-solution');sel.innerHTML=cellSolutionOptions.map(([v,t])=>`<option value="${v}">${t}</option>`).join('');sel.value=sols[i];}
+ }else{
+  $('#solution').innerHTML=solutionOptions(m).map(([v,t])=>`<option value="${v}">${t}</option>`).join('');$('#solution').value=state.solution;
+ }
+ $('#bridge').hidden=m!=='cell';$('#bridge').textContent=state.bridge?'移除鹽橋':'裝回鹽橋';$('#power').hidden=m==='cell';$('#power').textContent=state.power?'關閉直流電源':'開啟直流電源';$('#speed').value=state.speed;$('#view').value=state.view;$('#setup-note').textContent='換電極、溶液或反接會開始新一輪觀察；拆線、移出電極與暫停則保留已有產物。';$('#reminder').textContent=reminders[m];
  makeScene();updateReadings();
 }
 function change(type,fn,{fresh=false}={}){pending=null;fn();if(fresh){freshObservation(state);saltViews.delete(state);}render();}
@@ -271,6 +293,13 @@ function openPopover(kind,triggerEl,fromKeyboard=false){
    run:()=>{if(state.electrodes[side]===v){closePopover({restoreFocus:fromKeyboard});return;}closePopover({restoreFocus:false});change('electrode',()=>{state.electrodes[side]=v;},{fresh:true});if(fromKeyboard)$(`#electrode-${side}`)?.focus();}
   }));
   note='上下拖曳或按 ↑／↓ 移出浸回';
+ }else if(kind==='solution-0'||kind==='solution-1'){
+  const side=kind==='solution-1'?1:0,cur=cellSolutions(state)[side];
+  title=(side?'右':'左')+'杯溶液';
+  items=cellSolutionOptions.map(([v,t])=>({
+   label:t,current:cur===v,
+   run:()=>{if(cur===v){closePopover({restoreFocus:fromKeyboard});return;}closePopover({restoreFocus:false});change('solution',()=>{const sols=[...cellSolutions(state)];sols[side]=v;state.solutions=sols;},{fresh:true});if(fromKeyboard)$(`#solution-target-${side}`)?.focus();}
+  }));
  }else if(kind==='solution'){
   title='更換溶液';
   items=solutionOptions(state.mode).map(([v,t])=>({
@@ -345,7 +374,8 @@ $('#speed').onchange=e=>{state.speed=Number(e.target.value);};$('#view').onchang
 $('#power').onclick=()=>change('power',()=>state.power=!state.power);
 $('#bridge').onclick=()=>change('bridge',()=>state.bridge=!state.bridge);
 for(let i=0;i<2;i++){$(i?'#right-electrode':'#left-electrode').onchange=e=>change('electrode',()=>{state.electrodes[i]=e.target.value;},{fresh:true});$(`#immerse-${i?'right':'left'}`).onclick=()=>change('immerse',()=>toggleElectrode(state,i));}
-$('#solution').onchange=e=>change('solution',()=>state.solution=e.target.value,{fresh:true});
+for(let i=0;i<2;i++){$(i?'#right-solution':'#left-solution').onchange=e=>{const sols=[...cellSolutions(state)];if(sols[i]===e.target.value)return;change('solution',()=>{sols[i]=e.target.value;state.solutions=sols;},{fresh:true});};}
+$('#solution').onchange=e=>{if(state.solution===e.target.value)return;change('solution',()=>state.solution=e.target.value,{fresh:true});};
 $('#unwire').onclick=()=>change('wire',()=>{state.wires=[];});
 $('#reverse').onclick=doReverse;
 function cancel(){pending=null;drawWires();updateReadings();}$('#cancel').onclick=cancel;

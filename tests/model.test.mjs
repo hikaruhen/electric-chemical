@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initial,snapshot,tick,connect,polarity,freshObservation,testCollectedGas,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles} from '../model.js';
+import {initial,snapshot,tick,connect,polarity,freshObservation,testCollectedGas,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,CELL_SOLUTIONS,cellSolutions} from '../model.js';
 import {BATTERY_REACTIONS,batteryReaction} from '../battery-structure.js';
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
 const run=(s,seconds)=>{for(let i=0;i<seconds*10;i++)tick(s,.1);};
@@ -18,3 +18,51 @@ test('same Cu ion reaches the interface and becomes Cu without a spatial jump',(
 test('spectators remain, including OH-/Na+ at completed water run and reverse polarity',()=>{for(const reverse of [false,true]){const s=initial('water');if(reverse){s.wires=[];connect(s,'n','r');connect(s,'p','l');}s.playing=true;run(s,64);const p=microParticles(s).filter(p=>p.opacity>.1);assert.ok(p.some(p=>p.species==='Na⁺'));assert.ok(p.some(p=>p.species==='OH⁻'));assert.ok(!p.some(p=>p.species==='Na'));}const s=initial('copper');s.extent=1;assert.ok(microParticles(s).some(p=>p.species==='SO₄²⁻'));});
 function sum(terms){const result={charge:0};for(const t of terms){const [raw,z]=t.formula.split('^');const charge=z?(z.startsWith('2')?2:1)*(z.endsWith('-')?-1:1):0;result.charge+=charge*t.count;if(raw==='e')continue;for(const m of raw.matchAll(/([A-Z][a-z]?)(\d*)/g))result[m[1]]=(result[m[1]]||0)+Number(m[2]||1)*t.count;}return result;}
 test('all displayed battery half and overall reactions balance atoms and charge',()=>{for(const r of BATTERY_REACTIONS)for(const eq of Object.values(r))assert.deepEqual(sum(eq.left),sum(eq.right));for(const [key,eq] of Object.entries(batteryReaction(2,'charge'))){assert.deepEqual(sum(eq.left),sum(eq.right));assert.deepEqual(eq.left,BATTERY_REACTIONS[2][key].right);}});
+test('cell 3x3 independent beaker solutions: true per-cup species, honest reasons, zero false progress, pause/preserve',()=>{
+ for(const solL of CELL_SOLUTIONS){
+  for(const solR of CELL_SOLUTIONS){
+   const s=initial('cell');
+   s.solutions=[solL,solR];
+   s.playing=true;
+   const q=snapshot(s);
+   const isStd=solL==='ZnSO4'&&solR==='CuSO4';
+   assert.equal(q.chemistryKnown,isStd,`chemistryKnown ${solL}/${solR}`);
+   assert.equal(q.valid,isStd,`valid ${solL}/${solR}`);
+   assert.equal(q.active,isStd,`active ${solL}/${solR}`);
+   const mp=microParticles(s);
+   const leftSp=new Set(mp.filter(p=>p.x<410).map(p=>p.species));
+   const rightSp=new Set(mp.filter(p=>p.x>410).map(p=>p.species));
+   for(const [sol,sp] of [[solL,leftSp],[solR,rightSp]]){
+    if(sol==='CuSO4'){assert.ok(sp.has('Cu²⁺')&&sp.has('SO₄²⁻')&&!sp.has('Zn²⁺'),`CuSO4 species ${[...sp]}`);}
+    else if(sol==='ZnSO4'){assert.ok(sp.has('Zn²⁺')&&sp.has('SO₄²⁻')&&!sp.has('Cu²⁺'),`ZnSO4 species ${[...sp]}`);}
+    else{assert.equal(sp.size,0,`water must have zero solute ions, got ${[...sp]}`);}
+   }
+   run(s,2);
+   if(isStd){assert.ok(s.time>0&&s.extent>0);}
+   else{
+    near(s.time,0);near(s.extent,0);
+    assert.ok(q.reason.length>0);
+    assert.doesNotMatch(q.reason,/沒有任何反應/);
+    if(solL==='CuSO4')assert.match(q.reason,/置換/);
+   }
+  }
+ }
+ // Independent cup change, fresh pause vs same-cup preservation, reset
+ const s=initial('cell');
+ assert.deepEqual(cellSolutions(s),['ZnSO4','CuSO4']);
+ assert.equal(s.playing,false);
+ s.playing=true;run(s,2);
+ const tBefore=s.time,eBefore=s.extent;
+ // Same solution keeps progress & play state
+ assert.equal(s.solutions[0],'ZnSO4');
+ assert.equal(s.time,tBefore);assert.equal(s.extent,eBefore);assert.equal(s.playing,true);
+ // Changing only left cup preserves right cup, electrodes, wires, bridge; fresh clears & pauses
+ s.solutions[0]='water';freshObservation(s);
+ assert.deepEqual(s.solutions,['water','CuSO4']);
+ assert.deepEqual(s.electrodes,['Zn','Cu']);
+ assert.equal(s.bridge,true);assert.equal(s.wires.length,2);
+ assert.equal(s.playing,false);near(s.time,0);near(s.extent,0);
+ // Reset restores default pair & paused
+ const r=initial('cell');
+ assert.deepEqual(r.solutions,['ZnSO4','CuSO4']);assert.equal(r.playing,false);
+});
