@@ -1,21 +1,21 @@
-import {MODES,initial,snapshot,tick,polarity,freshObservation,connect,testCollectedGas,GEOMETRY,electrodeSpec,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,GAS_TRAVEL_TIME} from './model.js?v=2.3.1';
-import {batteryStructure,BATTERY_PARTS,updateLeadVisuals} from './battery-structure.js?v=2.3.1';
-const $=s=>document.querySelector(s), svg=$('#scene');
-let state=initial(),pending=null,drag=null,last=performance.now(),lastUI=0,batteryIndex=0,batteryPart='overview';
+import {MODES,initial,snapshot,tick,polarity,freshObservation,connect,testCollectedGas,GEOMETRY,electrodeSpec,electrodeGeometry,setElectrodeY,toggleElectrode,microParticles,GAS_TRAVEL_TIME} from './model.js?v=2.4.0';
+import {batteryStructure,BATTERY_PARTS,updateLeadVisuals} from './battery-structure.js?v=2.4.0';
+const $=s=>document.querySelector(s), svg=$('#scene'), stage=$('#scene-stage'), hitsHost=$('#scene-hits');
+let state=initial(),pending=null,drag=null,popover=null,last=performance.now(),lastUI=0,batteryIndex=0,batteryPart='overview';
 state.observationPolarity=[-1,1];
-let batteryProcess='discharge',leadProgress=0,leadPlaying=false,sceneZoom=1,phoneDrag=false;
-const LEAD_DURATION=10;
-const saltViews=new WeakMap(),BRIDGE_REMOVED=-82,BRIDGE_MIN=-90,BRIDGE_THRESHOLD=-41;
-const phoneBrowse=e=>e.pointerType==='touch'&&matchMedia('(max-width:899px)').matches&&!phoneDrag;
-function setSceneZoom(value){sceneZoom=Math.max(1,Math.min(3,value));$('#scene-viewport').style.setProperty('--scene-zoom',sceneZoom);$('#scene-viewport').classList.toggle('zoomed',sceneZoom>1);$('#zoom-level').textContent=Math.round(sceneZoom*100)+'%';$('#zoom-out').disabled=sceneZoom===1;$('#zoom-in').disabled=sceneZoom===3;if(sceneZoom===1){$('#scene-viewport').scrollLeft=0;$('#scene-viewport').scrollTop=0;}}
+let batteryProcess='discharge',leadProgress=0,leadPlaying=false,sceneZoom=1;
+const LEAD_DURATION=10,DRAG_SLOP_PX=10;
+const saltViews=new WeakMap(),activePointers=new Set(),BRIDGE_REMOVED=-82,BRIDGE_MIN=-90,BRIDGE_THRESHOLD=-41;
+function setSceneZoom(value){sceneZoom=Math.max(1,Math.min(3,value));$('#scene-viewport').style.setProperty('--scene-zoom',sceneZoom);$('#scene-viewport').classList.toggle('zoomed',sceneZoom>1);$('#zoom-level').textContent=Math.round(sceneZoom*100)+'%';$('#zoom-out').disabled=sceneZoom===1;$('#zoom-in').disabled=sceneZoom===3;if(sceneZoom===1){$('#scene-viewport').scrollLeft=0;$('#scene-viewport').scrollTop=0;}if(popover)closePopover({restoreFocus:false});requestAnimationFrame(syncHitHandles);}
 $('#zoom-in').onclick=()=>setSceneZoom(sceneZoom+.5);$('#zoom-out').onclick=()=>setSceneZoom(sceneZoom-.5);$('#zoom-fit').onclick=()=>{setSceneZoom(1);if(matchMedia('(max-width:899px) and (orientation:landscape)').matches)$('#scene-viewport').scrollIntoView({block:'start'});};
-$('#gesture-mode').onclick=()=>{phoneDrag=!phoneDrag;cancelDrag();$('#scene-viewport').classList.toggle('drag-mode',phoneDrag);$('#gesture-mode').setAttribute('aria-pressed',String(phoneDrag));$('#gesture-mode').textContent=phoneDrag?'恢復滑動':'拖曳裝置';$('#gesture-hint').textContent=phoneDrag?'拖曳模式：可移動電極與鹽橋。完成後按「恢復滑動」。':'上下滑動頁面；可雙指縮放。接點也可點選接線。';};
 setSceneZoom(1);
 const material={Zn:'鋅片 Zn',Cu:'銅片 Cu',C:'碳棒 C',Fe:'鐵迴紋針 Fe'};
 const color={Zn:'#a2afb0',Cu:'#b97443',C:'#424e4c',Fe:'#97a7a9'};
 const intro={cell:['01 / 化學能 → 電能','讓鋅放出電子，看看鹽橋為什麼不可少。'],water:['02 / 電能 → 化學能','接上直流電源，在兩極收集不同的氣體。'],copper:['03 / 同一溶液，不同電極','換一種正極，比較產物、質量與藍色深淺。'],plate:['04 / 把金屬搬到物體上','讓迴紋針披上銅層，追蹤銅從哪裡來。'],batteries:['05 / 從實驗桌到生活','打開三種電池，點部位看看材料怎麼反應。']};
 const reminders={cell:'電子只沿外導線由鋅流向銅；鹽橋由離子導電。鋅是負極／氧化端，銅是正極／還原端。',water:'負極還原產生氫氣，正極氧化產生氧氣。相同溫度、壓力下，氫氣體積是氧氣的 2 倍。',copper:'負極都析出銅；碳正極產生氧氣，銅正極則溶解補充銅離子。不要把兩種正極的產物混在一起。',plate:'被鍍物接負極，鍍層金屬接正極，電鍍液含該金屬離子。銅正極減少，被鍍物增加。'};
 const eNames=['n','p','l','r'];
+const electrodeOptions=(m,i)=>m==='cell'?['Zn','Cu']:m==='water'?['C','Cu']:m==='plate'?i===0?['Fe','C','Cu']:['Cu','C','Fe']:['C','Cu'];
+const solutionOptions=m=>m==='cell'?[['paired','左硫酸鋅／右硫酸銅'],['water','兩杯純水（不支援）']]:m==='water'?[['NaOH','水＋NaOH（助導電）'],['water','純水（比較導電性）']]:[['CuSO4','硫酸銅水溶液'],['water','純水（沒有銅離子）']];
 function el(tag,attrs={},content=''){return `<${tag} ${Object.entries(attrs).map(([k,v])=>`${k}="${v}"`).join(' ')}>${content}</${tag}>`;}
 const text=(x,y,t,size=15,fill='#284e43',extra={})=>el('text',{x,y,'font-size':size,fill,...extra},t);
 const fmt=n=>(n>=0?'+':'−')+Math.abs(n).toFixed(3);
@@ -46,32 +46,146 @@ function galvanometerSvg(){
 function makeScene(){
  const cell=state.mode==='cell',water=state.mode==='water';
  let h=`<defs><linearGradient id="liquid" x2="0" y2="1"><stop stop-color="#bce9ef"/><stop offset="1" stop-color="#61b7d1"/></linearGradient><linearGradient id="meter-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e8f0ea"/></linearGradient></defs>`;
-
  h+=el('rect',{x:45,y:485,width:730,height:10,rx:5,fill:'#d2dfcd'});
- if(cell){for(const x of [130,450]){h+=el('path',{d:`M${x} 300 V457 Q${x} 477 ${x+20} 477 H${x+200} Q${x+220} 477 ${x+220} 457 V300`,fill:'#fff','fill-opacity':'.5',stroke:'#9eb9b1','stroke-width':3});h+=el('rect',{id:x===130?'left-liquid':'right-liquid',x:x+3,y:332,width:214,height:140,rx:10,fill:x===130?'#e2ece4':'url(#liquid)'});h+=el('line',{x1:x,y1:332,x2:x+220,y2:332,stroke:'#71b2c2','stroke-width':2});}
- h+=text(240,515,'硫酸鋅 ZnSO₄',15,'#526f66',{'text-anchor':'middle'})+text(560,515,'硫酸銅 CuSO₄',15,'#526f66',{'text-anchor':'middle'});
- }else{const left=135,right=685;h+=el('path',{d:`M${left} 300 V458 Q${left} 478 ${left+20} 478 H${right-20} Q${right} 478 ${right} 458 V300`,fill:'#fff','fill-opacity':'.6',stroke:'#99b5ac','stroke-width':3});h+=el('rect',{id:'right-liquid',x:left+3,y:323,width:right-left-6,height:150,rx:10,fill:water?'#c8e9f8':'url(#liquid)'});h+=el('line',{x1:left,y1:323,x2:right,y2:323,stroke:'#70abc4','stroke-width':2});h+=text(410,515,water?(state.solution==='NaOH'?'水＋NaOH 助導電 · 水色示意':'純水 · 水色示意'):'硫酸銅 CuSO₄',15,'#526f66',{'text-anchor':'middle'});}
- if(cell){h+=galvanometerSvg();}else{h+=el('rect',{x:290,y:48,width:240,height:76,rx:15,fill:'#254d46',stroke:'#749183','stroke-width':2})+text(410,78,state.power?'直流電源 ON':'直流電源 OFF',17,'#fff',{'text-anchor':'middle'})+text(410,107,'−                 ＋',23,'#e5f1dc',{'text-anchor':'middle'});}
- if(cell){h+=`<g id="salt-bridge" class="draggable" tabindex="0" role="button" aria-label="鹽橋，點選拆裝或上下拖曳" data-drag="bridge" transform="translate(0 ${state.bridge?0:BRIDGE_REMOVED})">`+el('path',{d:'M335 393 L335 286 Q335 254 370 254 L450 254 Q485 254 485 286 L485 393',stroke:'#9abfb6','stroke-width':24,fill:'none'})+el('path',{d:'M335 393 L335 286 Q335 254 370 254 L450 254 Q485 254 485 286 L485 393',stroke:'#e5f2db','stroke-width':17,fill:'none'})+text(410,state.bridge?240:284,'鹽橋 KNO₃',15,'#56755b',{'text-anchor':'middle'})+'</g>';}
- if(water){for(let i=0;i<2;i++){const x=i?570:250;h+=`<defs><clipPath id="tube-inside-${i}"><path d="M${x-39} 430 V223 Q${x-39} 207 ${x} 207 Q${x+39} 207 ${x+39} 223 V430 Z"/></clipPath></defs>`;h+=el('path',{d:`M${x-43} 430 V223 Q${x-43} 203 ${x} 203 Q${x+43} 203 ${x+43} 223 V430`,fill:'#fcfefa',stroke:'#81aebc','stroke-width':2});h+=el('rect',{id:`tube-water-${i}`,x:x-39,y:207,width:78,height:223,fill:'#bce5f8','clip-path':`url(#tube-inside-${i})`});h+=el('line',{id:`tube-surface-${i}`,x1:x-39,y1:207,x2:x+39,y2:207,stroke:'#70abc4','stroke-width':2,'clip-path':`url(#tube-inside-${i})`});h+=text(x,186,'',15,'#315951',{'text-anchor':'middle',id:`gas-label-${i}`});h+=text(x,486,'',11,'#658373',{'text-anchor':'middle'});}
- for(let i=0;i<2;i++)h+=el('path',{id:`gas-route-${i}`,d:gasRoute(i,410,207),stroke:'none',fill:'none'});
+ if(cell){
+  for(const x of [130,450])h+=el('path',{d:`M${x} 300 V457 Q${x} 477 ${x+20} 477 H${x+200} Q${x+220} 477 ${x+220} 457 V300`,fill:'#fff','fill-opacity':'.5',stroke:'#9eb9b1','stroke-width':3,'pointer-events':'none'});
+  const leftLbl=state.solution==='water'?'純水（未支援）':'硫酸鋅 ZnSO₄',rightLbl=state.solution==='water'?'純水（未支援）':'硫酸銅 CuSO₄';
+  h+=`<g id="solution-target" class="tappable" data-action="solution" tabindex="0" role="button" aria-haspopup="dialog" aria-label="溶液條件，點選更換溶液">`+
+   el('rect',{id:'left-liquid',x:133,y:332,width:214,height:140,rx:10,fill:'#e2ece4'})+
+   el('rect',{id:'right-liquid',x:453,y:332,width:214,height:140,rx:10,fill:'url(#liquid)'})+
+   el('line',{x1:130,y1:332,x2:350,y2:332,stroke:'#71b2c2','stroke-width':2,'pointer-events':'none'})+
+   el('line',{x1:450,y1:332,x2:670,y2:332,stroke:'#71b2c2','stroke-width':2,'pointer-events':'none'})+
+   el('rect',{x:164,y:494,width:152,height:32,rx:10,fill:'#edf4ee',stroke:'#bfd2c7','stroke-width':1.2})+
+   el('rect',{x:484,y:494,width:152,height:32,rx:10,fill:'#edf4ee',stroke:'#bfd2c7','stroke-width':1.2})+
+   text(240,515,leftLbl+' ▾',14.5,'#355b51',{'text-anchor':'middle'})+
+   text(560,515,rightLbl+' ▾',14.5,'#355b51',{'text-anchor':'middle'})+
+   '</g>';
+ }else{
+  const left=135,right=685;
+  h+=el('path',{d:`M${left} 300 V458 Q${left} 478 ${left+20} 478 H${right-20} Q${right} 478 ${right} 458 V300`,fill:'#fff','fill-opacity':'.6',stroke:'#99b5ac','stroke-width':3,'pointer-events':'none'});
+  const solLbl=water?(state.solution==='NaOH'?'水＋NaOH 助導電 · 水色示意':'純水 · 水色示意'):(state.solution==='water'?'純水（缺少銅離子）':'硫酸銅 CuSO₄');
+  h+=`<g id="solution-target" class="tappable" data-action="solution" tabindex="0" role="button" aria-haspopup="dialog" aria-label="溶液條件，點選更換溶液">`+
+   el('rect',{id:'right-liquid',x:left+3,y:323,width:right-left-6,height:150,rx:10,fill:water?'#c8e9f8':'url(#liquid)'})+
+   el('line',{x1:left,y1:323,x2:right,y2:323,stroke:'#70abc4','stroke-width':2,'pointer-events':'none'})+
+   el('rect',{x:280,y:494,width:260,height:32,rx:10,fill:'#edf4ee',stroke:'#bfd2c7','stroke-width':1.2})+
+   text(410,515,solLbl+' ▾',14.5,'#355b51',{'text-anchor':'middle'})+
+   '</g>';
  }
- for(let i=0;i<2;i++){const x=i?570:250,mat=state.electrodes[i],length=electrodeSpec(state).length;if(water)h+=el('path',{id:`insulated-lead-${i}`,d:insulatedLead(i),stroke:'#536e65','stroke-width':4,fill:'none','pointer-events':'none'});h+=`<g class="draggable" id="electrode-${i}" tabindex="0" role="button" aria-label="${i?'右':'左'}電極，點選或上下拖曳" data-drag="${i}" transform="translate(${x} ${state.electrodeY[i]})">`;
- if(mat==='Fe'){h+=el('path',{id:`metal-${i}`,d:'M-12 10 V142 Q-12 155 0 155 Q18 155 18 142 V28 Q18 10 5 10 Q-2 10 -2 28 V134',stroke:color[mat],'stroke-width':9,fill:'none'})+el('path',{id:`deposit-${i}`,d:'M-12 48 V142 Q-12 155 0 155 Q18 155 18 142 V48',stroke:'#be7845','stroke-width':0,fill:'none'});}else{h+=el('rect',{id:`metal-${i}`,x:-15,y:0,width:30,height:length,rx:4,fill:color[mat],stroke:'#506761','stroke-width':1})+el('rect',{id:`deposit-${i}`,x:-18,y:45,width:36,height:length-45,rx:3,fill:'#c2824f',opacity:0});}
- h+=el('rect',{x:-29,y:0,width:58,height:length,fill:'transparent'});if(!water)h+=el('line',{x1:0,y1:-25,x2:0,y2:0,stroke:'#536e65','stroke-width':5});h+=text(0,30,mat,14,mat==='C'?'#fff':'#183c36',{'text-anchor':'middle'})+'</g>';
- h+=text(x,467,'',14,'#466c61',{'text-anchor':'middle',id:`material-label-${i}`})+text(x,235,'',16,'#234f43',{'text-anchor':'middle',id:`pole-${i}`});}
+ if(cell){
+  h+=`<g id="power-target" class="tappable" data-action="power" tabindex="0" role="button" aria-haspopup="dialog" aria-label="檢流計與外接導線，點選交換接法或拆線">${galvanometerSvg()}</g>`;
+ }else{
+  h+=`<g id="power-target" class="tappable" data-action="power" tabindex="0" role="button" aria-haspopup="dialog" aria-label="直流電源，點選開關電源、交換接法或拆線">`+
+   el('rect',{x:290,y:48,width:240,height:76,rx:15,fill:'#254d46',stroke:'#749183','stroke-width':2})+
+   text(410,78,state.power?'直流電源 ON ▾':'直流電源 OFF ▾',16.5,'#fff',{'text-anchor':'middle'})+
+   text(410,107,'−                 ＋',23,'#e5f1dc',{'text-anchor':'middle'})+
+   '</g>';
+ }
+ if(cell){
+  h+=`<g id="salt-bridge" class="draggable" tabindex="0" role="button" aria-label="鹽橋，上下拖曳或按方向鍵上移出、下裝回" data-drag="bridge" transform="translate(0 ${state.bridge?0:BRIDGE_REMOVED})">`+
+   el('path',{d:'M335 393 L335 286 Q335 254 370 254 L450 254 Q485 254 485 286 L485 393',stroke:'transparent','stroke-width':56,fill:'none'})+
+   el('path',{d:'M335 393 L335 286 Q335 254 370 254 L450 254 Q485 254 485 286 L485 393',stroke:'#9abfb6','stroke-width':24,fill:'none'})+
+   el('path',{d:'M335 393 L335 286 Q335 254 370 254 L450 254 Q485 254 485 286 L485 393',stroke:'#e5f2db','stroke-width':17,fill:'none'})+
+   text(410,state.bridge?240:284,'鹽橋 KNO₃',15,'#56755b',{'text-anchor':'middle'})+'</g>';
+ }
+ if(water){
+  for(let i=0;i<2;i++){
+   const x=i?570:250;
+   h+=`<defs><clipPath id="tube-inside-${i}"><path d="M${x-39} 430 V223 Q${x-39} 207 ${x} 207 Q${x+39} 207 ${x+39} 223 V430 Z"/></clipPath></defs>`;
+   h+=el('path',{d:`M${x-43} 430 V223 Q${x-43} 203 ${x} 203 Q${x+43} 203 ${x+43} 223 V430`,fill:'#fcfefa',stroke:'#81aebc','stroke-width':2,'pointer-events':'none'});
+   h+=el('rect',{id:`tube-water-${i}`,x:x-39,y:207,width:78,height:223,fill:'#bce5f8','clip-path':`url(#tube-inside-${i})`,'pointer-events':'none'});
+   h+=el('line',{id:`tube-surface-${i}`,x1:x-39,y1:207,x2:x+39,y2:207,stroke:'#70abc4','stroke-width':2,'clip-path':`url(#tube-inside-${i})`,'pointer-events':'none'});
+   h+=text(x,186,'',15,'#315951',{'text-anchor':'middle',id:`gas-label-${i}`});
+   h+=text(x,486,'',11,'#658373',{'text-anchor':'middle'});
+  }
+  for(let i=0;i<2;i++)h+=el('path',{id:`gas-route-${i}`,d:gasRoute(i,410,207),stroke:'none',fill:'none'});
+ }
+ for(let i=0;i<2;i++){
+  const x=i?570:250,mat=state.electrodes[i],length=electrodeSpec(state).length;
+  if(water)h+=el('path',{id:`insulated-lead-${i}`,d:insulatedLead(i),stroke:'#536e65','stroke-width':4,fill:'none','pointer-events':'none'});
+  h+=`<g class="draggable" id="electrode-${i}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${i?'右':'左'}電極（${material[mat]}），點選換材料，上下拖曳或按方向鍵上移出、下浸回" data-drag="${i}" transform="translate(${x} ${state.electrodeY[i]})">`;
+  if(mat==='Fe'){
+   h+=el('path',{id:`metal-${i}`,d:'M-12 10 V142 Q-12 155 0 155 Q18 155 18 142 V28 Q18 10 5 10 Q-2 10 -2 28 V134',stroke:color[mat],'stroke-width':9,fill:'none'})+
+    el('path',{id:`deposit-${i}`,d:'M-12 48 V142 Q-12 155 0 155 Q18 155 18 142 V48',stroke:'#be7845','stroke-width':0,fill:'none'});
+  }else{
+   h+=el('rect',{id:`metal-${i}`,x:-15,y:0,width:30,height:length,rx:4,fill:color[mat],stroke:'#506761','stroke-width':1})+
+    el('rect',{id:`deposit-${i}`,x:-18,y:45,width:36,height:length-45,rx:3,fill:'#c2824f',opacity:0})+
+    el('line',{x1:-6,y1:8,x2:6,y2:8,stroke:mat==='C'?'#9eb0ac':'#2d4a44','stroke-width':1.5,opacity:.55,'pointer-events':'none'})+
+    el('line',{x1:-6,y1:12,x2:6,y2:12,stroke:mat==='C'?'#9eb0ac':'#2d4a44','stroke-width':1.5,opacity:.55,'pointer-events':'none'});
+  }
+  // 80 SVG width hit box ensures >=44px rendered touch target even at 390/844 phone scale
+  h+=el('rect',{x:-40,y:0,width:80,height:length,fill:'transparent'});
+  if(!water)h+=el('line',{x1:0,y1:-25,x2:0,y2:0,stroke:'#536e65','stroke-width':5,'pointer-events':'none'});
+  h+=text(0,32,mat,14,mat==='C'?'#fff':'#183c36',{'text-anchor':'middle'})+'</g>';
+  h+=text(x,467,'',14,'#466c61',{'text-anchor':'middle',id:`material-label-${i}`})+text(x,235,'',16,'#234f43',{'text-anchor':'middle',id:`pole-${i}`});
+ }
  h+='<g id="micro-particles" pointer-events="none"></g><g id="gas-bubbles" pointer-events="none"></g>';
- if(cell){h+='<path id="salt-route-left" d="M410 254 L370 254 Q335 254 335 286 L335 410" fill="none" stroke="none"/><path id="salt-route-right" d="M410 254 L450 254 Q485 254 485 286 L485 410" fill="none" stroke="none"/><g id="salt-particles" pointer-events="none"></g>';for(let i=0;i<2;i++){const nitrate=i%2,name=nitrate?'硝酸根離子':'鉀離子',species=nitrate?'NO₃⁻':'K⁺',ink=nitrate?'#b55408':'#2c6550',bg=nitrate?'#fff7ee':'#ffffff';h+=`<g id="salt-key-${i}" pointer-events="none"><path class="salt-ion-leader" fill="none" stroke="${ink}" stroke-width="1.2" stroke-dasharray="3 3"/><g class="salt-ion-caption"><rect x="0" y="-15" width="${nitrate?138:108}" height="30" rx="7" fill="${bg}" fill-opacity=".97" stroke="${ink}" stroke-width="1.3"/>${text(8,4,name+' <tspan font-size="15" font-weight="700">'+species+'</tspan>',14,ink)}</g></g>`;}}
+ if(cell){
+  h+='<path id="salt-route-left" d="M410 254 L370 254 Q335 254 335 286 L335 410" fill="none" stroke="none"/><path id="salt-route-right" d="M410 254 L450 254 Q485 254 485 286 L485 410" fill="none" stroke="none"/><g id="salt-particles" pointer-events="none"></g>';
+  for(let i=0;i<2;i++){
+   const nitrate=i%2,name=nitrate?'硝酸根離子':'鉀離子',species=nitrate?'NO₃⁻':'K⁺',ink=nitrate?'#b55408':'#2c6550',bg=nitrate?'#fff7ee':'#ffffff';
+   h+=`<g id="salt-key-${i}" pointer-events="none"><path class="salt-ion-leader" fill="none" stroke="${ink}" stroke-width="1.2" stroke-dasharray="3 3"/><g class="salt-ion-caption"><rect x="0" y="-15" width="${nitrate?138:108}" height="30" rx="7" fill="${bg}" fill-opacity=".97" stroke="${ink}" stroke-width="1.3"/>${text(8,4,name+' <tspan font-size="15" font-weight="700">'+species+'</tspan>',14,ink)}</g></g>`;
+  }
+ }
  h+='<g id="wires"></g><g id="flow"></g><g id="terminals"></g>';svg.innerHTML=h;
- if(state.solution==='water')svg.querySelectorAll('text').forEach(n=>{if(n.textContent.includes('硫酸鋅'))n.textContent='純水（未支援）';else if(n.textContent.includes('硫酸銅'))n.textContent=state.mode==='cell'?'純水（未支援）':'純水（缺少銅離子）';});drawWires();updateDynamic();
+ drawWires();updateDynamic();
 }
 function insulatedLead(i){const [tx,ty]=terminalPos(i?'r':'l'),x=i?570:250,g=electrodeGeometry(state,i);return g.immersed?`M${tx} ${ty} V460 H${x} V${g.top}`:`M${tx} ${ty} Q${tx} ${g.top} ${x} ${g.top}`;}
 function gasRoute(side,originY,front){const x=side?552:268;return `M${x} ${originY} V${front+5}`;}
+function terminalHitCenter(id){
+ const [x,y]=terminalPos(id);
+ const hx=(id==='l'&&y<150)?x-10:(id==='r'&&y<150)?x+10:id==='n'?x+8:id==='p'?x-8:x;
+ const hy=Math.max(54,(id==='l'||id==='r')&&state.mode!=='water'?y-8:y);
+ return [hx,hy];
+}
+function ensureHitHandles(){
+ if(hitsHost.children.length)return;
+ const defs=[
+  ['hit-el-0',{drag:'0'}],['hit-el-1',{drag:'1'}],
+  ['hit-bridge-top',{drag:'bridge'}],['hit-bridge-l',{drag:'bridge'}],['hit-bridge-r',{drag:'bridge'}],
+  ['hit-term-n',{terminal:'n'}],['hit-term-p',{terminal:'p'}],['hit-term-l',{terminal:'l'}],['hit-term-r',{terminal:'r'}]
+ ];
+ for(const [id,ds] of defs){
+  const d=document.createElement('div');d.id=id;d.className='hit-handle';
+  if(ds.drag!==undefined)d.dataset.drag=ds.drag;
+  if(ds.terminal!==undefined)d.dataset.terminal=ds.terminal;
+  hitsHost.append(d);
+ }
+}
+function placeHit(id,x,y,w,h,visible=true){
+ const el=document.getElementById(id);if(!el)return;
+ if(!visible){el.hidden=true;return;}
+ const ctm=svg.getScreenCTM(),st=stage.getBoundingClientRect();
+ if(!ctm||!st.width||!st.height){el.hidden=true;return;}
+ const pt=(sx,sy)=>{const p=svg.createSVGPoint();p.x=sx;p.y=sy;return p.matrixTransform(ctm);};
+ const a=pt(x,y),b=pt(x+w,y+h);
+ const l=Math.max(0,a.x-st.left),t=Math.max(0,a.y-st.top),r=Math.min(st.width,b.x-st.left),bo=Math.min(st.height,b.y-st.top);
+ el.hidden=false;
+ el.style.left=l.toFixed(1)+'px';el.style.top=t.toFixed(1)+'px';
+ el.style.width=Math.max(0,r-l).toFixed(1)+'px';el.style.height=Math.max(0,bo-t).toFixed(1)+'px';
+}
+function syncHitHandles(){
+ if(state.mode==='batteries'){hitsHost.hidden=true;return;}
+ hitsHost.hidden=false;ensureHitHandles();
+ const spec=electrodeSpec(state),cell=state.mode==='cell';
+ placeHit('hit-el-0',250-40,state.electrodeY[0],80,spec.length,true);
+ placeHit('hit-el-1',570-40,state.electrodeY[1],80,spec.length,true);
+ const bo=drag?.id==='bridge'?(drag.bridgeOffset??(state.bridge?0:BRIDGE_REMOVED)):(state.bridge?0:BRIDGE_REMOVED);
+ placeHit('hit-bridge-top',312,224+bo,196,74,cell);
+ placeHit('hit-bridge-l',311,274+bo,48,124,cell);
+ placeHit('hit-bridge-r',461,274+bo,48,124,cell);
+ for(const id of eNames){const [hx,hy]=terminalHitCenter(id);placeHit('hit-term-'+id,hx-39,hy-39,78,78,true);}
+}
 function drawWires(){
- $('#wires').innerHTML=state.wires.map(([a,b],i)=>el('path',{id:`wire-${i}`,class:'wire',d:wireD(a,b),stroke:a==='p'||b==='p'?'#b8734c':'#546e65','stroke-width':5,fill:'none','data-wire':i,tabindex:0,role:'button','aria-label':`導線 ${i+1}，點選拆除`})+el('path',{d:wireD(a,b),class:'wire',stroke:'transparent','stroke-width':58,fill:'none','data-wire':i})).join('');
- $('#terminals').innerHTML=eNames.map(id=>{const [x,y]=terminalPos(id);return `<g class="terminal" data-terminal="${id}" tabindex="0" role="button" aria-label="${{n:'電源負端或檢流計左端',p:'電源正端或檢流計右端',l:'左電極',r:'右電極'}[id]}接點">`+el('circle',{cx:x,cy:y,r:29,fill:'transparent'})+el('circle',{cx:x,cy:y,r:10,fill:pending===id?'#efca60':'#fff',stroke:pending===id?'#a47d15':'#28765f','stroke-width':3})+el('circle',{cx:x,cy:y,r:3,fill:'#28765f'})+'</g>';}).join('');
+ $('#wires').innerHTML=state.wires.map(([a,b],i)=>el('path',{id:`wire-${i}`,class:'wire',d:wireD(a,b),stroke:a==='p'||b==='p'?'#b8734c':'#546e65','stroke-width':5,fill:'none','data-wire':i,tabindex:0,role:'button','aria-label':`導線 ${i+1}，點選拆除`})+el('path',{d:wireD(a,b),class:'wire',stroke:'transparent','stroke-width':60,fill:'none','data-wire':i})).join('');
+ $('#terminals').innerHTML=eNames.map(id=>{
+  const [x,y]=terminalPos(id),[hx,hy]=terminalHitCenter(id);
+  return `<g class="terminal" id="terminal-${id}" data-terminal="${id}" tabindex="0" role="button" aria-label="${{n:'電源負端或檢流計左端',p:'電源正端或檢流計右端',l:'左電極',r:'右電極'}[id]}接點">`+
+   el('circle',{cx:hx,cy:hy,r:39,fill:'transparent'})+
+   el('circle',{cx:x,cy:y,r:10,fill:pending===id?'#efca60':'#fff',stroke:pending===id?'#a47d15':'#28765f','stroke-width':3})+
+   el('circle',{cx:x,cy:y,r:3,fill:'#28765f'})+'</g>';
+ }).join('');
  let h='';for(let i=0;i<12;i++)h+=`<g id="electron-${i}" pointer-events="none"><circle class="electron-dot" r="8" fill="#b24063" stroke="#fff" stroke-width="1.2"/>${text(0,3,'−',10,'white',{'text-anchor':'middle',class:'electron-minus'})}<path class="current-arrow" d="M-12 0 H10 M3 -6 L10 0 L3 6" fill="none" stroke="#a86b00" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></g>`;h+=text(410,142,'',15,'#9e3b5b',{'text-anchor':'middle',id:'flow-label'});$('#flow').innerHTML=h;
- $('#cancel').hidden=!pending;updateDynamic();
+ $('#cancel').hidden=!pending;updateDynamic();syncHitHandles();
 }
 function updateDynamic(){
  if(state.mode==='batteries')return;const q=snapshot(state),phase=state.time*.38;
@@ -126,16 +240,106 @@ function updateReadings(){const q=snapshot(state),m=state.mode;if(m==='batteries
 }
 function render(){
  const m=state.mode;$('#tabs').innerHTML=Object.entries(MODES).map(([id,name])=>`<button data-mode="${id}" role="tab" aria-selected="${m===id}">${name}</button>`).join('');$('#title').textContent=MODES[m];$('#eyebrow').textContent=intro[m][0];$('#subtitle').textContent=intro[m][1];$('#scene-name').textContent=MODES[m];$('#lab').hidden=m==='batteries';$('#battery-room').hidden=m!=='batteries';if(m==='batteries'){renderBattery();return;}
- for(let i=0;i<2;i++){const opts=m==='cell'?['Zn','Cu']:m==='water'?['C','Cu']:m==='plate'?i===0?['Fe','C','Cu']:['Cu','C','Fe']:['C','Cu'];const sel=$(i?'#right-electrode':'#left-electrode');sel.innerHTML=opts.map(v=>`<option value="${v}">${material[v]}</option>`).join('');sel.value=state.electrodes[i];$(`#immerse-${i?'right':'left'}`).textContent=(electrodeGeometry(state,i).immersed?'移出':'浸回')+(i?'右':'左')+'電極';}
- $('#solution').innerHTML=(m==='cell'?[['paired','左硫酸鋅／右硫酸銅'],['water','兩杯純水（不支援）']]:m==='water'?[['NaOH','水＋NaOH（助導電）'],['water','純水（比較導電性）']]:[['CuSO4','硫酸銅水溶液'],['water','純水（沒有銅離子）']]).map(([v,t])=>`<option value="${v}">${t}</option>`).join('');$('#solution').value=state.solution;$('#bridge').hidden=m!=='cell';$('#bridge').textContent=state.bridge?'移除鹽橋':'裝回鹽橋';$('#power').hidden=m==='cell';$('#power').textContent=state.power?'關閉直流電源':'開啟直流電源';$('#speed').value=state.speed;$('#view').value=state.view;$('#setup-note').textContent='換電極、溶液或反接會開始新一輪觀察；拆線、移出電極與暫停則保留已有產物。';$('#reminder').textContent=reminders[m];
+ for(let i=0;i<2;i++){const opts=electrodeOptions(m,i);const sel=$(i?'#right-electrode':'#left-electrode');sel.innerHTML=opts.map(v=>`<option value="${v}">${material[v]}</option>`).join('');sel.value=state.electrodes[i];$(`#immerse-${i?'right':'left'}`).textContent=(electrodeGeometry(state,i).immersed?'移出':'浸回')+(i?'右':'左')+'電極';}
+ $('#solution').innerHTML=solutionOptions(m).map(([v,t])=>`<option value="${v}">${t}</option>`).join('');$('#solution').value=state.solution;$('#bridge').hidden=m!=='cell';$('#bridge').textContent=state.bridge?'移除鹽橋':'裝回鹽橋';$('#power').hidden=m==='cell';$('#power').textContent=state.power?'關閉直流電源':'開啟直流電源';$('#speed').value=state.speed;$('#view').value=state.view;$('#setup-note').textContent='換電極、溶液或反接會開始新一輪觀察；拆線、移出電極與暫停則保留已有產物。';$('#reminder').textContent=reminders[m];
  makeScene();updateReadings();
 }
 function change(type,fn,{fresh=false}={}){pending=null;fn();if(fresh){freshObservation(state);saltViews.delete(state);}render();}
+function doReverse(){
+ if(state.wires.length!==2){state.message='先完成兩條導線，再交換接法；目前接線保持不變。';updateReadings();return;}
+ change('reverse',()=>{state.wires=[['n',polarity(state)[0]<0?'r':'l'],['p',polarity(state)[0]<0?'l':'r']];state.observationPolarity=polarity(state);if(state.mode==='cell'){state.playing=false;}else{freshObservation(state);saltViews.delete(state);}});
+}
+// Non-modal HTML popover: freezes observation while open, preserves play intent on cancel/no-op
+const popEl=$('#scene-popover'),popTitle=$('#popover-title'),popBody=$('#popover-body');
+function closePopover({restoreFocus=false}={}){
+ if(!popover)return;
+ const sel=popover.triggerSelector;
+ popover=null;
+ popEl.hidden=true;popBody.innerHTML='';
+ if(restoreFocus&&sel)$(sel)?.focus();
+}
+function openPopover(kind,triggerEl,fromKeyboard=false){
+ if(state.mode==='batteries')return;
+ if(popover?.kind===kind){closePopover({restoreFocus:fromKeyboard});return;}
+ const triggerSelector=triggerEl?.id?'#'+triggerEl.id:null;
+ let title='',items=[],note='';
+ if(kind==='electrode-0'||kind==='electrode-1'){
+  const side=kind==='electrode-1'?1:0;
+  title=(side?'右':'左')+'電極材料';
+  items=electrodeOptions(state.mode,side).map(v=>({
+   label:material[v],current:state.electrodes[side]===v,
+   run:()=>{if(state.electrodes[side]===v){closePopover({restoreFocus:fromKeyboard});return;}closePopover({restoreFocus:false});change('electrode',()=>{state.electrodes[side]=v;},{fresh:true});if(fromKeyboard)$(`#electrode-${side}`)?.focus();}
+  }));
+  note='上下拖曳或按 ↑／↓ 移出浸回';
+ }else if(kind==='solution'){
+  title='更換溶液';
+  items=solutionOptions(state.mode).map(([v,t])=>({
+   label:t,current:state.solution===v,
+   run:()=>{if(state.solution===v){closePopover({restoreFocus:fromKeyboard});return;}closePopover({restoreFocus:false});change('solution',()=>{state.solution=v;},{fresh:true});if(fromKeyboard)$('#solution-target')?.focus();}
+  }));
+ }else if(kind==='power'){
+  const wired2=state.wires.length===2,hasWire=state.wires.length>0;
+  if(state.mode==='cell'){
+   title='檢流計與導線';
+   items=[
+    {label:'交換兩線接法',disabled:!wired2,run:()=>{closePopover({restoreFocus:false});doReverse();if(fromKeyboard)$('#power-target')?.focus();}},
+    {label:'拆下全部導線',disabled:!hasWire,run:()=>{closePopover({restoreFocus:false});change('wire',()=>{state.wires=[];});if(fromKeyboard)$('#power-target')?.focus();}}
+   ];
+  }else{
+   title='直流電源與導線';
+   items=[
+    {label:state.power?'關閉直流電源':'開啟直流電源',run:()=>{closePopover({restoreFocus:false});change('power',()=>{state.power=!state.power;});if(fromKeyboard)$('#power-target')?.focus();}},
+    {label:'交換兩線接法',disabled:!wired2,run:()=>{closePopover({restoreFocus:false});doReverse();if(fromKeyboard)$('#power-target')?.focus();}},
+    {label:'拆下全部導線',disabled:!hasWire,run:()=>{closePopover({restoreFocus:false});change('wire',()=>{state.wires=[];});if(fromKeyboard)$('#power-target')?.focus();}}
+   ];
+  }
+ }else return;
+ popover={kind,triggerSelector};
+ popTitle.textContent=title;popBody.innerHTML='';
+ items.forEach(it=>{
+  const b=document.createElement('button');b.type='button';
+  if(it.disabled)b.disabled=true;
+  if(it.current)b.setAttribute('aria-pressed','true');
+  b.innerHTML=`<span>${it.label}</span>${it.current?'<span aria-hidden="true">✓</span>':''}`;
+  b.onclick=it.run;popBody.append(b);
+ });
+ if(note){const p=document.createElement('p');p.className='popover-note';p.textContent=note;popBody.append(p);}
+ popEl.hidden=false;
+ // Position adjacent to trigger element and strictly clamp within viewport (works on 390/844 & 200% zoom)
+ const vw=window.innerWidth,vh=window.innerHeight,pad=8;
+ const pr=popEl.getBoundingClientRect(),tr=(triggerEl||svg).getBoundingClientRect();
+ let left=kind==='electrode-0'?tr.right+10:kind==='electrode-1'?tr.left-pr.width-10:tr.left+(tr.width-pr.width)/2;
+ let top=kind.startsWith('electrode-')?tr.top:kind==='power'?tr.bottom+8:tr.top-pr.height-8;
+ if(left+pr.width>vw-pad)left=tr.left-pr.width-10;
+ if(left<pad)left=tr.right+10;
+ left=Math.max(pad,Math.min(vw-pr.width-pad,left));
+ top=Math.max(pad,Math.min(vh-pr.height-pad,top));
+ popEl.style.left=Math.round(left)+'px';popEl.style.top=Math.round(top)+'px';
+ const firstBtn=popBody.querySelector('button:not(:disabled)')||$('#popover-close');
+ firstBtn?.focus();
+}
+$('#popover-close').onclick=()=>closePopover({restoreFocus:true});
+popEl.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){e.preventDefault();closePopover({restoreFocus:true});return;}
+ const btns=[...popEl.querySelectorAll('button:not(:disabled)')];if(!btns.length)return;
+ const idx=btns.indexOf(document.activeElement);
+ if(e.key==='ArrowDown'){e.preventDefault();btns[(idx+1)%btns.length].focus();}
+ else if(e.key==='ArrowUp'){e.preventDefault();btns[(idx-1+btns.length)%btns.length].focus();}
+ else if(e.key==='Home'){e.preventDefault();btns[0].focus();}
+ else if(e.key==='End'){e.preventDefault();btns[btns.length-1].focus();}
+});
+document.addEventListener('pointerdown',e=>{
+ if(!popover)return;
+ if(popEl.contains(e.target))return;
+ if(e.target.closest('#scene-stage [data-drag],#scene-stage [data-action],#scene-stage [data-terminal],#scene-stage [data-wire]'))return;
+ closePopover({restoreFocus:false});
+},true);
+
 const modeStates=new Map();
-function switchMode(m,{reset=false}={}){state.playing=false;leadPlaying=false;modeStates.set(state.mode,state);state=reset?initial(m):(modeStates.get(m)||initial(m));state.playing=false;if(!state.observationPolarity)state.observationPolarity=[-1,1];pending=null;drag=null;render();}
+function switchMode(m,{reset=false}={}){closePopover({restoreFocus:false});cancelDrag();state.playing=false;leadPlaying=false;modeStates.set(state.mode,state);state=reset?initial(m):(modeStates.get(m)||initial(m));state.playing=false;if(!state.observationPolarity)state.observationPolarity=[-1,1];pending=null;drag=null;render();}
 $('#tabs').addEventListener('click',e=>{if(e.target.dataset.mode)switchMode(e.target.dataset.mode);});
-$('#reset').onclick=()=>{if(state.mode==='batteries'){batteryIndex=0;batteryPart='overview';batteryProcess='discharge';leadProgress=0;leadPlaying=false;renderBattery();}else switchMode(state.mode,{reset:true});};
-$('#play').onclick=()=>{state.playing=!state.playing;updateDynamic();updateReadings();};
+$('#reset').onclick=()=>{closePopover({restoreFocus:false});cancelDrag();if(state.mode==='batteries'){batteryIndex=0;batteryPart='overview';batteryProcess='discharge';leadProgress=0;leadPlaying=false;renderBattery();}else switchMode(state.mode,{reset:true});};
+$('#play').onclick=()=>{closePopover({restoreFocus:false});state.playing=!state.playing;updateDynamic();updateReadings();};
 $('#gas-tests').onclick=e=>{const button=e.target.closest('[data-gas-test]');if(button){const side=Number(button.dataset.gasTest);state.gasTests[side]=testCollectedGas(state,side);updateReadings();}};
 $('#speed').onchange=e=>{state.speed=Number(e.target.value);};$('#view').onchange=e=>{state.view=e.target.value;updateDynamic();};
 $('#power').onclick=()=>change('power',()=>state.power=!state.power);
@@ -143,21 +347,124 @@ $('#bridge').onclick=()=>change('bridge',()=>state.bridge=!state.bridge);
 for(let i=0;i<2;i++){$(i?'#right-electrode':'#left-electrode').onchange=e=>change('electrode',()=>{state.electrodes[i]=e.target.value;},{fresh:true});$(`#immerse-${i?'right':'left'}`).onclick=()=>change('immerse',()=>toggleElectrode(state,i));}
 $('#solution').onchange=e=>change('solution',()=>state.solution=e.target.value,{fresh:true});
 $('#unwire').onclick=()=>change('wire',()=>{state.wires=[];});
-$('#reverse').onclick=()=>{if(state.wires.length!==2){state.message='先完成兩條導線，再交換接法；目前接線保持不變。';updateReadings();return;}change('reverse',()=>{state.wires=[['n',polarity(state)[0]<0?'r':'l'],['p',polarity(state)[0]<0?'l':'r']];state.observationPolarity=polarity(state);if(state.mode==='cell'){state.playing=false;}else{freshObservation(state);saltViews.delete(state);}});};
+$('#reverse').onclick=doReverse;
 function cancel(){pending=null;drawWires();updateReadings();}$('#cancel').onclick=cancel;
 function pickTerminal(id){if(!pending){if(state.wires.some(w=>w.includes(id))){state.message='這個接點已有導線；先點導線拆下再接。';}else pending=id;}else if(pending===id){pending=null;}else{if(connect(state,pending,id)){state.message='接線完成。';pending=null;}else{state.message='需連接一個電源／檢流計端與一個空電極端；無效接法未變動原導線。';}}drawWires();updateReadings();}
 function point(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());}
-svg.addEventListener('click',e=>{if(!matchMedia('(max-width:899px)').matches||phoneDrag)return;const t=e.target.closest('[data-terminal]'),w=e.target.closest('[data-wire]'),b=e.target.closest('[data-drag]');if(t)pickTerminal(t.dataset.terminal);else if(w)change('wire',()=>state.wires.splice(Number(w.dataset.wire),1));else if(b)change(b.dataset.drag==='bridge'?'bridge':'immerse',()=>{if(b.dataset.drag==='bridge')state.bridge=!state.bridge;else toggleElectrode(state,Number(b.dataset.drag));});});
-svg.addEventListener('pointerdown',e=>{if(matchMedia('(max-width:899px)').matches&&!phoneDrag)return;if(!e.isPrimary){cancelDrag();return;}const terminal=e.target.closest('[data-terminal]'),wire=e.target.closest('[data-wire]'),body=e.target.closest('[data-drag]');if(terminal){e.preventDefault();drag={kind:'terminal',id:terminal.dataset.terminal,start:point(e),moved:false};svg.setPointerCapture(e.pointerId);}else if(wire){drag={kind:'wire',index:Number(wire.dataset.wire),start:point(e),moved:false};svg.setPointerCapture(e.pointerId);}else if(body){e.preventDefault();const id=body.dataset.drag;drag={kind:'body',id,start:point(e),moved:false,startY:id==='bridge'?0:state.electrodeY[Number(id)],startBridge:state.bridge};svg.setPointerCapture(e.pointerId);}});
-svg.addEventListener('pointermove',e=>{if(!drag)return;const p=point(e),dy=p.y-drag.start.y;if(Math.hypot(p.x-drag.start.x,dy)>6)drag.moved=true;if(phoneBrowse(e))return;if(drag.kind==='terminal'&&drag.moved){let line=$('#pending-line');if(!line){line=document.createElementNS('http://www.w3.org/2000/svg','path');line.id='pending-line';line.setAttribute('stroke','#c99727');line.setAttribute('stroke-width',4);line.setAttribute('fill','none');line.setAttribute('pointer-events','none');svg.append(line);}const [x,y]=terminalPos(drag.id);line.setAttribute('d',`M${x} ${y} L${p.x} ${p.y}`);}else if(drag.kind==='body'){if(drag.id==='bridge'){drag.bridgeOffset=Math.max(BRIDGE_MIN,Math.min(10,(drag.startBridge?0:BRIDGE_REMOVED)+dy));$('#salt-bridge').setAttribute('transform',`translate(0 ${drag.bridgeOffset})`);}else{setElectrodeY(state,Number(drag.id),drag.startY+dy);drawWires();updateReadings();}}});
-svg.addEventListener('pointerup',e=>{if(!drag)return;const d=drag;drag=null;$('#pending-line')?.remove();if(d.kind==='wire'){if(!d.moved)change('wire',()=>state.wires.splice(d.index,1));return;}if(phoneBrowse(e)&&d.moved){render();return;}if(d.kind==='terminal'){if(d.moved){const p=point(e),target=eNames.find(id=>{const [x,y]=terminalPos(id);return Math.hypot(x-p.x,y-p.y)<24;});if(target&&target!==d.id){pending=d.id;pickTerminal(target);}else{state.message='未落在接點，原接線保留。';drawWires();updateReadings();}}else pickTerminal(d.id);}else{if(d.id==='bridge'){const dy=point(e).y-d.start.y;state.bridge=d.moved?(d.startBridge?dy>BRIDGE_THRESHOLD:dy>-BRIDGE_THRESHOLD):!d.startBridge;}else if(!d.moved)toggleElectrode(state,Number(d.id));render();}});
-function cancelDrag(){if(drag?.kind==='body'&&drag.id!=='bridge')state.electrodeY[Number(drag.id)]=drag.startY;drag=null;$('#pending-line')?.remove();pending=null;makeScene();updateReadings();}
-svg.addEventListener('pointercancel',cancelDrag);
-svg.addEventListener('keydown',e=>{if(!['Enter',' '].includes(e.key))return;e.preventDefault();const t=e.target.closest('[data-terminal]'),w=e.target.closest('[data-wire]'),b=e.target.closest('[data-drag]');if(t)pickTerminal(t.dataset.terminal);else if(w)change('wire',()=>state.wires.splice(Number(w.dataset.wire),1));else if(b)change(b.dataset.drag==='bridge'?'bridge':'immerse',()=>{if(b.dataset.drag==='bridge')state.bridge=!state.bridge;else toggleElectrode(state,Number(b.dataset.drag));});});
-document.addEventListener('keydown',e=>{if(!document.querySelector('dialog[open]')&&e.key==='Escape')cancelDrag();});
-$('#guide-content').innerHTML=`<h3>先玩，再問為什麼</h3><p>每個實驗載入時皆已備好預設裝置並先暫停，按「▶ 播放」即開始反應。途中可隨時「Ⅱ 暫停」，再拆線、拆鹽橋、移出電極或更換材料來比較。</p><ul><li>接線：點一個空接點，再點另一端；也可從接點拖到另一接點。點導線可拆下。落空不刪原線，Esc 或「取消接線」可取消。</li><li>電極、鹽橋：上下拖曳本體即可移出或浸入；也能點選本體或使用右側按鈕。接線保留。拖動途中暫停模型，放開後才套用新狀態。</li><li>換電極、溶液與反接會清空本輪產物及時間並回到暫停，避免把舊氣體或鍍層錯貼到新條件。拆線、暫停、移出則保留已產生的量。切換實驗會保留各自進度並先暫停；「重設」回復目前實驗的預設裝置並待播放。</li></ul><h3>模型的範圍</h3><p>這是教材條件下的理想化趨勢模型，時間、粒子密度、氣泡數、鍍層厚度、檢流計偏轉皆為示意；鹽橋離子持續分批示意，最多保留16個，舊批次在杯內淡出而非跳回橋內。硫酸根（SO₄²⁻，紫系）與硝酸根（NO₃⁻，橙系）以不同色系搭配完整化學式區分。傳統電流箭頭只表示方向，不是物質；箭頭速度與密度不代表真實電流大小，亦非實驗速率或實物精密讀值。無實際電壓、電阻、電流及溫度求解。電子只出現在外電路；溶液內移動的是離子。暫停時所有動態凍結，條件缺少時停止新反應；非反應離子保留，已形成的氣泡繼續收集。</p><table><tr><th>裝置</th><th>定量關係與停止界線</th></tr><tr><td>鋅銅電池</td><td>各 50 mL、0.1 M 硫酸鹽；KNO₃ 鹽橋。每反應 1 mol Zn 消耗 1 mol Cu²⁺，n(e⁻)=2n(Cu)。最多 0.005 mol，銅離子耗盡即停止。</td></tr><tr><td>電解水</td><td>水＋NaOH、碳電極；鹼性半反應。相同溫壓，H₂ : O₂＝2 : 1。60 示意秒生成 20/10 mL；氣泡經 3 示意秒運送後收集，非水耗盡。</td></tr><tr><td>硫酸銅／電鍍</td><td>150 mL、0.2 M。60 示意秒對應 0.03 mol Cu；以銅正極補回同量銅離子，碳正極則消耗銅離子並產生氧氣。碳正極氧氣刻度僅示意。莫耳質量 Cu 63.546、Zn 65.38 g/mol。</td></tr></table><p>忽略過電位、極化、擴散限制、溶液體積改變、電極接觸電阻及副反應。純水非完全不導電，但在這個觀察尺度不顯示可測產氣。碳棒視為不消耗的惰性電極；電鍍以已清潔鐵物件理想附著，未模擬表面處理與鐵正極腐蝕。銅離子耗盡後不延伸假造反應。反接鐵物件為正極時，因副反應未建模，停止並提示。</p><h3>教材對照</h3><p>指定《02-114 國中自然3下（理化）備課 CH1》：印刷頁 19–23 鋅銅電池；24–25 電池構造；26–28 電解水；29–31 電解硫酸銅；32–33 電鍍。生活電池只做教材內的定性比較，鉛蓄單格展示 5 片交錯並聯極板（負極板多一片，讓正極板兩面都對著負極板）與 H⁺／SO₄²⁻ 放充電定性動畫，預設暫停、按播放開始、達終態即停止並可重置動畫，不預測市售產品性能。</p><h3>虛擬操作與實驗</h3><p>可點選左右收集氣體做虛擬檢驗，依當輪產物及收集量顯示性質；不提供實際點火操作。實際實驗需教師指導；硫酸銅與電鍍廢液須集中處理，不能倒進水槽。廢電池應交回收管道，不能投入一般垃圾。</p>`;
-$('#help').onclick=()=>{$('#guide').showModal();};$('#close-help').onclick=()=>$('#guide').close();
-$('#open-details').onclick=()=>$('#details-dialog').showModal();
+function cancelDrag(){
+ if(!drag){if(pending){pending=null;drawWires();updateReadings();}return;}
+ const d=drag;drag=null;
+ try{if(d.captured&&d.captureTarget?.hasPointerCapture(d.pointerId))d.captureTarget.releasePointerCapture(d.pointerId);}catch{}
+ if(d.kind==='body'){if(d.id==='bridge')state.bridge=d.startBridge;else state.electrodeY[Number(d.id)]=d.startY;}
+ $('#pending-line')?.remove();pending=null;
+ makeScene();updateReadings();
+}
+// Track active pointers globally so a 2nd finger landing anywhere cleanly cancels active drag
+window.addEventListener('pointerdown',e=>{activePointers.add(e.pointerId);if(activePointers.size>=2&&drag)cancelDrag();},true);
+window.addEventListener('pointerup',e=>{activePointers.delete(e.pointerId);},true);
+window.addEventListener('pointercancel',e=>{activePointers.delete(e.pointerId);},true);
+stage.addEventListener('touchstart',e=>{if(e.touches.length>=2&&drag)cancelDrag();},{passive:true});
+// Unified pointer pipeline on #scene-stage: real HTML .hit-handle boxes honor CSS touch-action:pinch-zoom at compositor level before gesture start
+stage.addEventListener('pointerdown',e=>{
+ if(e.button>0)return;
+ activePointers.add(e.pointerId);
+ if(activePointers.size>=2||!e.isPrimary){cancelDrag();return;}
+ const terminal=e.target.closest('[data-terminal]'),body=e.target.closest('[data-drag]'),wire=e.target.closest('[data-wire]'),action=e.target.closest('[data-action]');
+ if(!terminal&&!body&&!wire&&!action)return;
+ if(terminal){
+  if(e.pointerType==='mouse')e.preventDefault();
+  const capEl=terminal;
+  drag={kind:'terminal',id:terminal.dataset.terminal,pointerId:e.pointerId,captureTarget:capEl,startClient:{x:e.clientX,y:e.clientY},startSvg:point(e),moved:false,captured:false};
+  try{capEl.setPointerCapture(e.pointerId);drag.captured=true;}catch{}
+ }else if(body){
+  if(e.pointerType==='mouse')e.preventDefault();
+  const id=body.dataset.drag,capEl=body,triggerEl=id==='bridge'?$('#salt-bridge'):$(`#electrode-${id}`);
+  drag={kind:'body',id,triggerEl,pointerId:e.pointerId,captureTarget:capEl,startClient:{x:e.clientX,y:e.clientY},startSvg:point(e),moved:false,captured:false,startY:id==='bridge'?0:state.electrodeY[Number(id)],startBridge:state.bridge,bridgeOffset:state.bridge?0:BRIDGE_REMOVED};
+  try{capEl.setPointerCapture(e.pointerId);drag.captured=true;}catch{}
+ }else if(wire){
+  drag={kind:'wire',index:Number(wire.dataset.wire),pointerId:e.pointerId,startClient:{x:e.clientX,y:e.clientY},moved:false,captured:false};
+ }else if(action){
+  drag={kind:'action',action:action.dataset.action,triggerEl:action,pointerId:e.pointerId,startClient:{x:e.clientX,y:e.clientY},moved:false,captured:false};
+ }
+});
+stage.addEventListener('pointermove',e=>{
+ if(!drag||e.pointerId!==drag.pointerId)return;
+ const distPx=Math.hypot(e.clientX-drag.startClient.x,e.clientY-drag.startClient.y);
+ if(!drag.moved){
+  if(distPx<DRAG_SLOP_PX)return;
+  drag.moved=true;
+  if(popover)closePopover({restoreFocus:false});
+ }
+ if(drag.kind==='wire'||drag.kind==='action')return;
+ const p=point(e);
+ if(drag.kind==='terminal'){
+  let line=$('#pending-line');
+  if(!line){line=document.createElementNS('http://www.w3.org/2000/svg','path');line.id='pending-line';line.setAttribute('stroke','#c99727');line.setAttribute('stroke-width',4);line.setAttribute('fill','none');line.setAttribute('pointer-events','none');svg.append(line);}
+  const [x,y]=terminalPos(drag.id);line.setAttribute('d',`M${x} ${y} L${p.x} ${p.y}`);
+ }else if(drag.kind==='body'){
+  const dy=p.y-drag.startSvg.y;
+  if(drag.id==='bridge'){
+   drag.bridgeOffset=Math.max(BRIDGE_MIN,Math.min(10,(drag.startBridge?0:BRIDGE_REMOVED)+dy));
+   $('#salt-bridge')?.setAttribute('transform',`translate(0 ${drag.bridgeOffset})`);
+   updateDynamic();updateReadings();syncHitHandles();
+  }else{
+   setElectrodeY(state,Number(drag.id),drag.startY+dy);drawWires();updateReadings();
+  }
+ }
+});
+stage.addEventListener('pointerup',e=>{
+ activePointers.delete(e.pointerId);
+ if(!drag||e.pointerId!==drag.pointerId)return;
+ const d=drag;drag=null;$('#pending-line')?.remove();
+ try{if(d.captured&&d.captureTarget?.hasPointerCapture(e.pointerId))d.captureTarget.releasePointerCapture(e.pointerId);}catch{}
+ if(d.kind==='wire'){if(!d.moved){closePopover({restoreFocus:false});change('wire',()=>state.wires.splice(d.index,1));}return;}
+ if(d.kind==='action'){if(!d.moved)openPopover(d.action,d.triggerEl,false);return;}
+ if(d.kind==='terminal'){
+  if(d.moved){
+   const p=point(e),target=eNames.find(id=>{const [x,y]=terminalPos(id);return Math.hypot(x-p.x,y-p.y)<30;});
+   if(target&&target!==d.id){pending=d.id;pickTerminal(target);}else{state.message='未落在接點，原接線保留。';drawWires();updateReadings();}
+  }else{closePopover({restoreFocus:false});pickTerminal(d.id);}
+  return;
+ }
+ if(d.id==='bridge'){
+  if(d.moved){state.bridge=d.bridgeOffset>BRIDGE_THRESHOLD;render();}
+  else{closePopover({restoreFocus:false});state.message='鹽橋：直接上下拖曳可移出或裝回（鍵盤 ↑ 移出、↓ 裝回）。';$('#salt-bridge')?.focus();updateReadings();}
+ }else{
+  if(d.moved){render();}
+  else{openPopover('electrode-'+d.id,d.triggerEl,false);}
+ }
+});
+const onPointerAbort=e=>{activePointers.delete(e.pointerId);if(drag&&e.pointerId===drag.pointerId)cancelDrag();};
+stage.addEventListener('pointercancel',onPointerAbort);
+stage.addEventListener('lostpointercapture',onPointerAbort);
+window.addEventListener('resize',()=>{if(drag)cancelDrag();if(popover)closePopover({restoreFocus:false});syncHitHandles();});
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>syncHitHandles()).observe(svg);
+svg.addEventListener('keydown',e=>{
+ const t=e.target.closest('[data-terminal]'),w=e.target.closest('[data-wire]'),b=e.target.closest('[data-drag]'),a=e.target.closest('[data-action]');
+ if(b&&(e.key==='ArrowUp'||e.key==='ArrowDown')){
+  e.preventDefault();closePopover({restoreFocus:false});
+  const id=b.dataset.drag,up=e.key==='ArrowUp';
+  if(id==='bridge'){if(state.bridge===up)change('bridge',()=>{state.bridge=!up;});$('#salt-bridge')?.focus();}
+  else{const i=Number(id),spec=electrodeSpec(state);change('immerse',()=>{setElectrodeY(state,i,up?spec.removedY:spec.insertedY);});$(`#electrode-${i}`)?.focus();}
+  return;
+ }
+ if(!['Enter',' '].includes(e.key))return;
+ e.preventDefault();
+ if(t){closePopover({restoreFocus:false});pickTerminal(t.dataset.terminal);}
+ else if(w){closePopover({restoreFocus:false});change('wire',()=>state.wires.splice(Number(w.dataset.wire),1));}
+ else if(b){
+  if(b.dataset.drag==='bridge'){state.message='鹽橋：直接上下拖曳或按鍵盤 ↑ 移出、↓ 裝回。';updateReadings();}
+  else openPopover('electrode-'+b.dataset.drag,b,true);
+ }else if(a){openPopover(a.dataset.action,a,true);}
+});
+document.addEventListener('keydown',e=>{
+ if(e.key!=='Escape')return;
+ if(popover){e.preventDefault();closePopover({restoreFocus:true});return;}
+ if(!document.querySelector('dialog[open]'))cancelDrag();
+});
+$('#guide-content').innerHTML=`<h3>先玩，再問為什麼</h3><p>每個實驗載入時皆已備好預設裝置並先暫停，按「▶ 播放」即開始反應。途中可隨時「Ⅱ 暫停」，再直接操作裝置來比較。</p><ul><li>電極與鹽橋：直接上下拖曳本體即可移出或浸入（不需切換模式），接線保留；鍵盤聚焦後可按 ↑ 移出、↓ 浸回。點選電極開啟材料選單；點選溶液或直流電源／檢流計開啟對應選單；右側「更多條件」收合提供備援清單。</li><li>接線：點一個空接點再點另一端，或從接點直接拖到另一接點；點導線即可拆除。落空不刪原線，多指、Esc 或「取消接線」可安全取消。</li><li>換電極、溶液與電解反接會清空本輪產物及時間並回到暫停（鋅銅反接保留產物並暫停）。拆線、電源開關、移出、暫停或關閉未改條件的選單皆保留已有進度與原本播放意願；切換實驗保留進度並先暫停；「重設」回復預設裝置並待播放。</li></ul><h3>模型的範圍</h3><p>這是教材條件下的理想化趨勢模型，時間、粒子密度、氣泡數、鍍層厚度、檢流計偏轉皆為示意；鹽橋離子持續分批示意，最多保留16個，舊批次在杯內淡出而非跳回橋內。硫酸根（SO₄²⁻，紫系）與硝酸根（NO₃⁻，橙系）以不同色系搭配完整化學式區分。傳統電流箭頭只表示方向，不是物質；箭頭速度與密度不代表真實電流大小，亦非實驗速率或實物精密讀值。無實際電壓、電阻、電流及溫度求解。電子只出現在外電路；溶液內移動的是離子。暫停時所有動態凍結，條件缺少時停止新反應；非反應離子保留，已形成的氣泡繼續收集。</p><table><tr><th>裝置</th><th>定量關係與停止界線</th></tr><tr><td>鋅銅電池</td><td>各 50 mL、0.1 M 硫酸鹽；KNO₃ 鹽橋。每反應 1 mol Zn 消耗 1 mol Cu²⁺，n(e⁻)=2n(Cu)。最多 0.005 mol，銅離子耗盡即停止。</td></tr><tr><td>電解水</td><td>水＋NaOH、碳電極；鹼性半反應。相同溫壓，H₂ : O₂＝2 : 1。60 示意秒生成 20/10 mL；氣泡經 3 示意秒運送後收集，非水耗盡。</td></tr><tr><td>硫酸銅／電鍍</td><td>150 mL、0.2 M。60 示意秒對應 0.03 mol Cu；以銅正極補回同量銅離子，碳正極則消耗銅離子並產生氧氣。碳正極氧氣刻度僅示意。莫耳質量 Cu 63.546、Zn 65.38 g/mol。</td></tr></table><p>忽略過電位、極化、擴散限制、溶液體積改變、電極接觸電阻及副反應。純水非完全不導電，但在這個觀察尺度不顯示可測產氣。碳棒視為不消耗的惰性電極；電鍍以已清潔鐵物件理想附著，未模擬表面處理與鐵正極腐蝕。銅離子耗盡後不延伸假造反應。反接鐵物件為正極時，因副反應未建模，停止並提示。</p><h3>教材對照</h3><p>指定《02-114 國中自然3下（理化）備課 CH1》：印刷頁 19–23 鋅銅電池；24–25 電池構造；26–28 電解水；29–31 電解硫酸銅；32–33 電鍍。生活電池只做教材內的定性比較，鉛蓄單格展示 5 片交錯並聯極板（負極板多一片，讓正極板兩面都對著負極板）與 H⁺／SO₄²⁻ 放充電定性動畫，預設暫停、按播放開始、達終態即停止並可重置動畫，不預測市售產品性能。</p><h3>虛擬操作與實驗</h3><p>可點選左右收集氣體做虛擬檢驗，依當輪產物及收集量顯示性質；不提供實際點火操作。實際實驗需教師指導；硫酸銅與電鍍廢液須集中處理，不能倒進水槽。廢電池應交回收管道，不能投入一般垃圾。</p>`;
+$('#help').onclick=()=>{closePopover({restoreFocus:false});$('#guide').showModal();};$('#close-help').onclick=()=>$('#guide').close();
+$('#open-details').onclick=()=>{closePopover({restoreFocus:false});$('#details-dialog').showModal();};
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());
 function syncFullscreen(){const on=!!document.fullscreenElement;$('#project').setAttribute('aria-pressed',String(on));$('#project').textContent=on?'⛶ 離開全螢幕':'⛶ 全螢幕';}
 $('#project').onclick=async()=>{if(document.fullscreenElement){await document.exitFullscreen();return;}try{if(!document.documentElement.requestFullscreen)throw new Error('unsupported');await document.documentElement.requestFullscreen();try{if(!screen.orientation?.lock)throw new Error('unsupported');await screen.orientation.lock('landscape');$('#orientation-hint').textContent='';}catch{$('#orientation-hint').textContent='請將平板橫放；可照常操作。';}}catch{$('#orientation-hint').textContent='此瀏覽器未開啟全螢幕，請將平板橫放操作。';}syncFullscreen();};
@@ -168,7 +475,7 @@ function updateBatteryPartSelection(){const desc=(BATTERY_PARTS[batteryIndex][ba
 function renderBattery(){const b=batteries[batteryIndex];$('#battery-room').innerHTML=`<div class="battery-layout"><div class="battery-menu" aria-label="選擇電池">${batteries.map((b,i)=>`<button data-battery="${i}" class="${i===batteryIndex?'selected':''}" aria-pressed="${i===batteryIndex}">${b.name}</button>`).join('')}</div><section class="canvas-card battery-detail${batteryIndex===2?' lead-detail':''}"><div class="battery-heading"><div><h2>${b.name}</h2><p>${b.hint}</p></div><div class="battery-controls">${batteryIndex===2?`<button data-process="discharge" aria-pressed="${batteryProcess==='discharge'}">放電</button><button data-process="charge" aria-pressed="${batteryProcess==='charge'}">充電</button><button id="lead-play" data-lead-action="toggle">${leadPlaying?'Ⅱ 暫停':leadProgress>0?'▶ 繼續':'▶ 播放'}</button><button id="lead-replay" data-lead-action="replay">↺ 重置動畫</button>`:'<span class="tag">一次電池 · 只放電</span>'}</div></div>${batteryStructure(batteryIndex,batteryProcess,batteryPart)}</section></div>`;if(batteryIndex===2){updateLeadVisuals($('#battery-room'),batteryProcess,leadProgress,leadPlaying);syncLeadControls();}}
 $('#battery-room').onclick=e=>{const target=e.target.closest('[data-battery],[data-process],[data-lead-action],[data-part]');if(!target)return;if(target.dataset.battery!==undefined){batteryIndex=Number(target.dataset.battery);batteryPart='overview';batteryProcess='discharge';leadProgress=0;leadPlaying=false;renderBattery();}else if(target.dataset.process){batteryProcess=target.dataset.process;leadProgress=0;leadPlaying=false;renderBattery();}else if(target.dataset.leadAction==='toggle'){if(leadProgress<1){leadPlaying=!leadPlaying;updateLeadVisuals($('#battery-room'),batteryProcess,leadProgress,leadPlaying);syncLeadControls();}}else if(target.dataset.leadAction==='replay'){leadProgress=0;leadPlaying=false;updateLeadVisuals($('#battery-room'),batteryProcess,leadProgress,leadPlaying);syncLeadControls();}else{batteryPart=target.dataset.part;if(batteryIndex===2)updateBatteryPartSelection();else renderBattery();}};
 $('#battery-room').onkeydown=e=>{if(['Enter',' '].includes(e.key)&&e.target.dataset.part){e.preventDefault();batteryPart=e.target.dataset.part;if(batteryIndex===2)updateBatteryPartSelection();else renderBattery();}};
-function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(state.mode!=='batteries'){if(!drag&&!document.querySelector('dialog[open]'))tick(state,dt);updateDynamic();if(now-lastUI>150){updateReadings();lastUI=now;}}else if(batteryIndex===2&&!document.querySelector('dialog[open]')){if(leadPlaying&&leadProgress<1){leadProgress=Math.min(1,leadProgress+dt/LEAD_DURATION);if(leadProgress>=1){leadPlaying=false;syncLeadControls();}updateLeadVisuals($('#battery-room'),batteryProcess,leadProgress,leadPlaying);}}requestAnimationFrame(frame);}
+function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;if(state.mode!=='batteries'){if(!drag&&!popover&&!document.querySelector('dialog[open]'))tick(state,dt);updateDynamic();if(now-lastUI>150){updateReadings();lastUI=now;}}else if(batteryIndex===2&&!document.querySelector('dialog[open]')){if(leadPlaying&&leadProgress<1){leadProgress=Math.min(1,leadProgress+dt/LEAD_DURATION);if(leadProgress>=1){leadPlaying=false;syncLeadControls();}updateLeadVisuals($('#battery-room'),batteryProcess,leadProgress,leadPlaying);}}requestAnimationFrame(frame);}
 render();requestAnimationFrame(frame);
 const phoneLandscape=matchMedia('(max-width:899px) and (orientation:landscape)');
 const focusPhoneOverview=()=>{if(phoneLandscape.matches&&sceneZoom===1&&state.mode!=='batteries')requestAnimationFrame(()=>$('#scene-viewport').scrollIntoView({block:'start'}));};
